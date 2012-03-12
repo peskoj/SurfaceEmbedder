@@ -13,6 +13,7 @@
 
 
 #define forall_disks(D, L)  for (Disk ** D = (L).mDisks.begin(); D!=(L).mDisks.end(); ++D)
+#define forall_emb_faces(F, E)  for ((F) = &(E).faces().front(); (F); (F) = (F)->next())
 
 class Slice;
 
@@ -23,6 +24,8 @@ class Disk
   Disk * mPair;
   int mId;
   node mCenter;
+  int mCenterVisible;
+  int mClockwise;
   List<edge> mCenterEdges;
   List<adjEntry> mOrient; //disk edges with an arbitrary orientation
   NodeArray<node> mNodePairs; //pairs of nodes of disks
@@ -44,10 +47,14 @@ class Disk
 
   node next(node u);
   adjEntry arc(node u);
+  adjEntry prev_arc(node u);
+  adjEntry center_arc(node u);
   node prev(node u);
+  int pairing_sign();
   int adjacent_nodes(node u, node v);
   void boundary(List<edge> & boundary, node u, node v);
   int alternating(List<node> & a, node * b);
+  node center();
 };
 
 
@@ -75,6 +82,7 @@ class Slice: public Graph
   int mSingle, mDouble;       //number of single-sided and double sided disks
   int mGenus;                 //genus available for cutting
   int mOrientable;            //orientability of the surface (+1 orientable, -1 non-orientable, 0 both)
+  int mCentersVisible;
   //  Cycle mCycle;
   //  CycleData mCycleData;
   AdjEntryArray<Disk*> mDiskInc; //Disk on the right side of an adjacency
@@ -110,7 +118,7 @@ class Slice: public Graph
   void add_centers();
   void remove_center(Disk * D);
   void remove_centers();
-  int is_center(node v);
+  Disk * is_center(node v);
   void push_disk_boundary(Disk * D, Cycle & C);
   void cycle_attachment(Disk * D, Cycle & C, List<node> & attachment);
   int count_inc(AdjEntryArray<Disk*> & inc, List<edge> & sg, node & center);
@@ -172,7 +180,7 @@ class Slice: public Graph
   void read_slice(Graph & G);
   void print_slice();
   void read_disk(Disk * D, Array<node> & nodes);
-  void print_disk(Disk * D);
+  void print_disk(Disk * D, NodeArray<int> & ind);
 
   void compute_copies();
   int compute_unselected();
@@ -182,7 +190,6 @@ class Slice: public Graph
   void sign_disk(Disk * D, AdjEntryArray<int> & signs);
   void pair_adj(adjEntry a, adjEntry b, int oA, int oB, AdjEntryArray<adjEntry> & pairs);
   void check_disk_embedding(Disk * D, int oD);
-  void move_disk_boundary(Disk * D, adjEntry a, int oD);
 
  public:
   void init(Graph & G);
@@ -211,6 +218,7 @@ class Face
   int mEdgeSingular;
   List<edge> mSingEdges;
   List<node> mSingNodes;
+  Face * mNext;
   
   void init(Embedder * G, int id);
   int compute_singularities();
@@ -222,6 +230,7 @@ class Face
   int edgeSingular() { return mEdgeSingular; }
   List<edge> & singEdges() { return mSingEdges; }
   List<node> & singNodes() { return mSingNodes; }
+  Face * next() { return mNext; }
 };
 
 class Embedder: public Graph
@@ -229,12 +238,13 @@ class Embedder: public Graph
   friend class Face;
  protected:
   Slice * mSlice;
+  Slice * mSliceEmb;
   EdgeArray<int> mSignature;
   AdjEntryArray<int> mFaceInc;
   AdjEntryArray<int> mLeft;
+  AdjEntryArray<Face*> mLeftFace;
+  List<Face> mFaces;
   int mFaceNum;
-  Array<Face> mFaces;
-  //  List<FaceElement> mFaces;
 
   adjEntry face_traverse_step(adjEntry & a, int & sign, AdjEntryArray<int> & visited, int face);
   adjEntry face_construct_step(adjEntry & a, int & sign, Face & F);
@@ -255,12 +265,13 @@ class Embedder: public Graph
   inline EdgeArray<int> & signature() { return mSignature; }
 
   int genus();
+  int compute_genus();
   int numberOfFaces();
   int compute_faces();
   int construct_faces();
   int compute_singularities();
 
-  Face & faces(int id) { return mFaces[id]; }
+  List<Face> & faces() { return mFaces; }
   Face & neighbor_face(Face & F, edge e);
   int same_face(edge e, edge f);
   int same_face(edge e, node u);

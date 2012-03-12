@@ -12,6 +12,7 @@ extern int planarcount;
 int pGenerate = 0;
 int pTest = 0;
 int pPlanar = 0;
+int pTestall = 0;
 
 AdjEntryArray<int> adjface;
 NodeArray< List<int> > nodeface;
@@ -413,6 +414,8 @@ int main(int argc, char ** argv)
 	  continue;
 	
 	print_graph(E);
+	if (!pTestall)
+	  break;
       }
     }
   }

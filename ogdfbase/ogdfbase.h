@@ -350,8 +350,10 @@ void print_edge_list(List<edge> & list);
 void print_node_list(List<node> & list, int linebreak = 1);
 void print_subdivision(KuratowskiSubdivision & S);
 void print_graph(Graph & G);
+void print_graph(Graph & G, NodeArray<int> & node_index);
 void print_graph_fast(Graph & G);
 void print_graph_graph6(Graph & G);
+void print_local_emb(node v);
 void print_emb(Graph & G);
 void print_emb(Graph & G, EdgeArray<int> & orient, int genus);
 int index(node u);
@@ -359,7 +361,7 @@ int index(node u);
 int read_graph(Graph & G);
 int read_graph_graph6(Graph & G);
 
-node subdivideEdge(Graph & G, edge e);
+node subdivide_edge(Graph & G, edge e);
 edge cubic_new_edge(Graph & G, edge e, edge f);
 
 int test_planarity(Graph & G);

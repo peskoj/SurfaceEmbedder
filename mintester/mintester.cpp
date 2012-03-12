@@ -23,7 +23,13 @@ int test_embeddable(Graph & G)
   if (res) {
     E.set_embedding();
     print_emb(E, genus);
-    E.check_embedding(genus, orientable);
+    int g = E.compute_genus();
+    printf("The graph is embeddable into the surface of genus %d orientable %d (required %d,%d)\n", g, E.orientable_emb(), genus, orientable);
+    if (g >= genus)
+      assert(g == genus);
+      if (orientable)
+	assert(E.orientable_emb() == orientable);
+    }
   }
 #endif
   return res;
@@ -78,6 +84,11 @@ int test_deletion(Graph & G)
 	break;
     }
   }
+
+#if VERBOSE
+  printf("# of edges tested: %d\n", ec);
+  printf("The graph is deletion-%s.\n", strmin[minimal].c_str());
+#endif
   
   return !minimal;
 }

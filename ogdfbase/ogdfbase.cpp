@@ -171,7 +171,7 @@ void print_graph_fast(Graph & G)
   printf("\n");
 }
 
-void print_graph(Graph & G)
+void print_graph(Graph & G, NodeArray<int> & ind)
 {
   int n = G.numberOfNodes();
   int m = G.numberOfEdges();
@@ -179,7 +179,7 @@ void print_graph(Graph & G)
 
   Array<edge> list(m);
 
-  NodeArray<int> ind(G, 0);
+  ind.init(G, 0);
   node u;
   int a = 0;
   forall_nodes(u, G)
@@ -196,7 +196,12 @@ void print_graph(Graph & G)
   for (i=0; i<m; i++)
     print_ord(ind[list[i]->source()], ind[list[i]->target()]);
   printf("\n");
+}
 
+void print_graph(Graph & G)
+{
+  NodeArray<int> ind(G, 0);
+  print_graph(G, ind);
 }
 
 void print_graph_color(Graph & G, NodeArray<int> & ncolor, EdgeArray<int> & ecolor)
@@ -214,6 +219,18 @@ void print_graph_color(Graph & G, NodeArray<int> & ncolor, EdgeArray<int> & ecol
   printf("}\n");
 }
 
+void print_local_emb(node v)
+{
+  printf("%d:[", v->index());
+  adjEntry a;
+  forall_adj(a, v) {
+    printf("%d", a->twinNode()->index());
+    if (a->succ())
+      printf(", ");
+  }
+  printf("]\n");
+}
+
 void print_emb(Graph & G, EdgeArray<int> & orient, int genus)
 {
   printf("Embedding of genus %d:\n", genus);
@@ -222,13 +239,14 @@ void print_emb(Graph & G, EdgeArray<int> & orient, int genus)
   forall_nodes(v, G) {
     adjEntry a;
     printf("%d:[", v->index());
-    forall_adj(a, v) {
-      printf("%d", a->twinNode()->index());
-      if (orient[a->theEdge()] < 0)
-	printf("-");
-      if (a->succ())
-	printf(", ");
-    }
+    if (v->degree())
+      forall_adj(a, v) {
+	printf("%d", a->twinNode()->index());
+	if (orient[a->theEdge()] < 0)
+	  printf("-");
+	if (a->succ())
+	  printf(", ");
+      }
     printf("], ");
   }
 
@@ -365,13 +383,8 @@ void remove_isolated(Graph & G)
 
 node subdivide_edge(Graph & G, edge e)
 {
-  node u = e->source();
-  node v = e->target();
-
-  G.delEdge(e);
-  node w = G.newNode();
-  G.newEdge(u, w);
-  G.newEdge(v, w);
+  edge f = G.split(e);
+  node w = e->commonNode(f);
 
   return w;
 }

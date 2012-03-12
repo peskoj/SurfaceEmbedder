@@ -26,11 +26,14 @@ Disk::Disk(Slice & S, int symmetric = 1)
   mGroup = 0;
   mPair = 0;
   mCenter = 0;
+  mCenterVisible = 0;
   mSymmetry = symmetric;
   //  mOutEdges = 0;
 
   mNodePairs.init(S, 0);
   mSide.init(S, 0);
+  mNext.init(S, 0);
+  mPrev.init(S, 0);
 }
 
 Disk::Disk(Slice & S, const Disk & D, NodeArray<node> & vCopy, EdgeArray<edge> & eCopy)
@@ -47,6 +50,8 @@ Disk::Disk(Slice & S, const Disk & D, NodeArray<node> & vCopy, EdgeArray<edge> &
 
   mNodePairs.init(S, 0);
   mSide.init(S, 0);
+  mNext.init(S, 0);
+  mPrev.init(S, 0);
 
   forall_listiterators(adjEntry, it, D.mOrient) {
     adjEntry b = *it;
@@ -68,6 +73,8 @@ Disk::Disk(Slice & S, const Disk & D, NodeArray<node> & vCopy, EdgeArray<edge> &
   }
 
   mCenter = 0;
+
+  recompute();
 }
 
 void Disk::set_symmetry(int s)
@@ -143,12 +150,30 @@ void Disk::exchange_node(node oldNode, node newNode)
 
 node Disk::next(node u)
 {
+  assert(arc(u));
   return arc(u)->twinNode();
 }
 
 adjEntry Disk::arc(node u)
 {
   return mNext[u];
+}
+ 
+adjEntry Disk::prev_arc(node u)
+{
+  return arc(prev(u))->twin();
+}
+
+adjEntry Disk::center_arc(node u)
+{
+  assert(mCenterVisible);
+
+  adjEntry b = arc(u);
+  while (b->twinNode() != center()) {
+    b = b->cyclicSucc();
+  }
+
+  return b;
 }
  
 node Disk::prev(node u)
@@ -171,6 +196,28 @@ int Disk::alternating(List<node> & a, node * b) //!!!?
   return 0;
 }
 
+int Disk::pairing_sign()
+{
+  if (!pair())
+    return 1;
+
+  adjEntry a = mOrient.front();
+  node u = a->theNode();
+  node v = mNodePairs[u];
+  node nu = next(u);
+  node nv = pair()->next(v);
+
+  if (mNodePairs[nu] == nv)
+    return 1;
+  else
+    return -1;
+}
+
+node Disk::center()
+{
+  return mCenter;
+}
+
 //----------------------- Slice --------------------------------
 
 Slice::Slice(): mOrig(0)
@@ -189,13 +236,14 @@ Slice::Slice(const Slice & slice)
 Slice::Slice(const Slice & slice, NodeArray<node> & vCopy, EdgeArray<edge> & eCopy) :
   mOrig(slice.mOrig), 
   mDiskNum(slice.mDiskNum), mSingle(slice.mSingle), mDouble(slice.mDouble),
-  mGenus(slice.mGenus), mOrientable(slice.mOrientable)
+  mGenus(slice.mGenus), mOrientable(slice.mOrientable), mCentersVisible(0)
 {
 #if DEBUG
   printf("Slice::Copy constructor\n");
 #endif
 
   Graph::construct(slice,vCopy,eCopy);
+  remove_isolated(*this);
 
 #if DEBUG
   printf("Graph constructed\n");
@@ -296,6 +344,7 @@ void Slice::init(Graph & G)
   mGenus = 0; 
   mOrientable = 0;
   mUnselected = 0;
+  mCentersVisible = 0;
   //  mUnselectedHidden = 1;
   
   NodeArray<node> vCopy;
@@ -390,26 +439,27 @@ void Slice::read_slice(Graph & G)
 
 void Slice::print_slice()
 {
-  print_graph(*this);
+  NodeArray<int> ind;
+  print_graph(*this, ind);
 
   node u;
   forall_nodes(u, *this) {
     if (!mNodeOrig[u]) {
 #if DEBUG
-      printf("(%d) ", u->index());
+      printf("(%d) ", ind[u]);
 #endif
       continue;
     }
       
-    printf("%d->%d ", u->index(), mNodeOrig[u]->index());
+    printf("%d->%d ", ind[u], ind[mNodeOrig[u]]);
   }
   printf("\n");
 
   forall_nodes(u, *this) {
     if (mPoss[u].size()) {
-      printf("%d:%d(", u->index(), mPoss[u].size());
+      printf("%d:%d(", ind[u], mPoss[u].size());
       forall_listiterators(node, it, mPoss[u]) {
-	printf("%d ", (*it)->index());
+	printf("%d ", ind[*it]);
       }
       printf(") ");
     }
@@ -418,7 +468,7 @@ void Slice::print_slice()
 
   printf("%d\n", mDiskNum);
   for (int i = 0; i<mDiskNum; i++) 
-    print_disk(mDisks[i]);
+    print_disk(mDisks[i], ind);
 
   printf("\n");
 }
@@ -447,7 +497,7 @@ void Slice::read_disk(Disk * D, Array<node> & nodes)
   }
 }
 
-void Slice::print_disk(Disk * D)
+void Slice::print_disk(Disk * D, NodeArray<int> & ind)
 {
   if (D->has_pair())
     printf("Disk P %d", D->pair()->mId);
@@ -458,7 +508,7 @@ void Slice::print_disk(Disk * D)
   
   forall_listiterators(adjEntry, it, D->mOrient) {
     adjEntry a = *it;
-    printf(" %d-%d", a->theNode()->index(), a->twinNode()->index());
+    printf(" %d-%d", ind[a->theNode()], ind[a->twinNode()]);
   }
   printf("\n");
 }
@@ -505,7 +555,7 @@ void Slice::compute_disk_inc()
 void Slice::compute_copies()
 {
 #if DEBUG
-  printf("In compute_copies (%d vertices, %d edges)\n", mOrig->numberOfNodes(), mOrig->numberOfEdges());
+  printf("In compute_copies (%d vertices, %d edges)\n", numberOfNodes(), numberOfEdges());
 #endif
 
   mNodeCopies.init(*mOrig);
@@ -619,16 +669,6 @@ void Slice::sign_disk(Disk * D, AdjEntryArray<int> & signs) //!!!
 }
 
 void Slice::pair_adj(adjEntry a, adjEntry b, int oA, int oB, AdjEntryArray<adjEntry> & pairs) //!!!
-{
-
-}
-
-void Slice::check_disk_embedding(Disk * D, int oD) //!!!
-{
-
-}
-
-void Slice::move_disk_boundary(Disk * D, adjEntry a, int oD) //!!!
 {
 
 }
@@ -1158,6 +1198,7 @@ int Slice::orient_disk(List<edge> & cycle, AdjEntryArray<Disk*> & color, Disk * 
     printf("In Slice::orient_disk starting at %s\n", print_edge_str(start));
   else
     printf("In Slice::orient_disk (no start)\n");
+  print_edge_list(cycle);
 #endif
   D->mOrient.clear();
 
@@ -1202,6 +1243,8 @@ int Slice::orient_disk(List<edge> & cycle, AdjEntryArray<Disk*> & color, Disk * 
     assert(!color[*it]);
     color[*it] = D;
   }
+
+  D->recompute();
 
   return 0;
 }
@@ -1297,8 +1340,8 @@ void Slice::cut_off_disk(Disk * D, EdgeArray<int> & disk, Disk * newD)
     if (copy[e->source()] != e->source() && copy[e->target()] != e->target()) {
       f = newEdgeCopy(e, copy[e->source()], copy[e->target()]);
     } else {
-      moveAdjEntry(e->adjSource(), copy[e->source()]);
-      moveAdjEntry(e->adjTarget(), copy[e->target()]);
+      moveSource(e, copy[e->source()]);
+      moveTarget(e, copy[e->target()]);
     }
 
     newcycle.pushBack(f);
@@ -1541,6 +1584,7 @@ node Slice::add_center(Disk * D)
     }
   }
 
+  D->mCenterVisible = 1;
   return D->mCenter;
 }
 
@@ -1548,6 +1592,8 @@ void Slice::add_centers()
 {
   for(int i=0; i<mDiskNum; i++)
     add_center(mDisks[i]);
+
+  mCentersVisible = 1;
 }
 
 void Slice::remove_center(Disk * D)
@@ -1557,17 +1603,23 @@ void Slice::remove_center(Disk * D)
   forall_listiterators(edge, it, D->mCenterEdges) {
     hideEdge(*it);
   }
+  D->mCenterVisible = 0;
 }
 
 void Slice::remove_centers()
 {
   for(int i=0; i<mDiskNum; i++)
     remove_center(mDisks[i]);
+
+  mCentersVisible = 0;
 }
 
-int Slice::is_center(node v)
+Disk * Slice::is_center(node v)
 {
-  return mDiskNodes[v].size() && mDiskNodes[v].front()->mCenter == v;
+  if (mDiskNodes[v].size() != 1)
+    return NULL;
+  else
+    return mDiskNodes[v].front();
 }
 
 
@@ -1602,30 +1654,41 @@ int Slice::cut_along_onesided(Cycle & cycle)
 int Slice:: disk_orientation(Disk * D, int withcenters)
 {
 #if DEBUG
-  printf("In Slice::disk_orientation: %d\n", D->id());
+  printf("In Slice::disk_orientation of disk %d with centers %d\n", D->id(), withcenters);
+  assert(withcenters == mCentersVisible);
 #endif
 
-  int orient = 0;
+  if (withcenters) {
+    adjEntry a = D->mOrient.front();
+    node u = a->theNode();
+    adjEntry b = D->prev_arc(u);
+    
+    adjEntry c = a;
+    while (c != b) {
+      c = c->cyclicSucc();
+      if (c->twinNode() == D->center())
+	return 1;
+    }
+    return -1;
+  }
+    
   forall_listiterators(adjEntry, it, D->mOrient) {
     adjEntry a = *it;
     adjEntry pred = a->cyclicPred();
     adjEntry next = a->cyclicSucc();
 
-#if DEBUG2
+#if DEBUG
     printf("at %d, left: %d, right: %d\n", a->theNode()->index(), pred->twinNode()->index(), next->twinNode()->index());
 #endif
 
-    if (mDiskInc[pred->twin()] != D) {
-      orient = -1;
-      break;
-    }
-    if (mDiskInc[next->twin()] != D) {
-      orient = 1;
-      break;
-    }
+    if (mDiskInc[pred->twin()] != D) 
+      return -1;
+
+    if (mDiskInc[next->twin()] != D) 
+      return 1;
   }
 
-  return orient;
+  return 0;
 }
 
 int Slice::test_disks_orientation(int orient, Disk * A, Disk * B)
@@ -1655,7 +1718,12 @@ int Slice::test_disks_orientation(int orient, Disk * A, Disk * B)
   if (!oB)
     return 1;
 
-  if ((oA == oB) == (orient < 0))
+  int pairing = A->pairing_sign();
+#if DEBUG
+  printf("Disks pairing sign: %d\n", pairing);
+#endif
+
+  if ((oA == oB*pairing) == (orient < 0))
     return 1;
 
 //   add_center(A);
@@ -1725,7 +1793,6 @@ void Slice::join_disks(Disk * D1, Disk * D2, node source, node target) //!!!sour
 
   NodeArray<node> merge(*this, 0);
     
-
   forall_listiterators(adjEntry, it, D1->mOrient) {
     adjEntry a = *it;
 
@@ -1754,6 +1821,7 @@ void Slice::join_disks(Disk * D1, Disk * D2, node source, node target) //!!!sour
       assert(e);
       C.pushBack(e);
       start = e;
+      delEdge(a->theEdge());
     } else
       C.pushBack(a->theEdge());
   }
@@ -2068,6 +2136,7 @@ int Slice::noncontractible_cycles(Cycle * cycles, int & num)
 #if DEBUG
     printf("Embedding needed\n");
     print_graph(*this);
+    print_graph_graph6(*this);
 #endif
     
     planar = test_planarity_with_embedding(*this);
@@ -2209,14 +2278,14 @@ void Slice::flip_disk(Disk * D)
 
   NodeArray<int> cut;
 
-  add_center(D);
-  add_center(D->pair());
+  //  add_center(D);
+  //  add_center(D->pair());
   int k = min_cut(*this, D->mCenter, D->pair()->mCenter, cut);
 #if DEBUG
   printf("Mincut between %d and %d of size %d found\n", D->mCenter->index(), D->pair()->mCenter->index(), k);
 #endif      
-  remove_center(D);
-  remove_center(D->pair());
+  //  remove_center(D);
+  //  remove_center(D->pair());
 
   assert(k < 3);
 
@@ -2227,6 +2296,9 @@ void Slice::flip_disk(Disk * D)
       printf("Reversing local rotation at %d\n", u->index());
 #endif      
       reverseAdjEdges(u);
+      Disk * F;
+      if ((F = is_center(u)))
+	F->mClockwise = -F->mClockwise;
       continue;
     }
 
@@ -2263,27 +2335,73 @@ void Slice::flip_disk(Disk * D)
   }
 }
 
+void Slice::check_disk_embedding(Disk * D, int oD) 
+{
+#if DEBUG
+  printf("Slice::check_disk_embedding disk %d orient %d\n", D->id(), oD);
+  assert(consistencyCheck());
+#endif      
+
+  forall_listiterators(adjEntry, it, D->mOrient) {
+    adjEntry a = *it;
+    node u = a->theNode();
+    adjEntry center = D->center_arc(u);
+    adjEntry b = D->prev_arc(u);
+
+#if DEBUG
+    print_local_emb(u);
+    printf("Arc %s, back arc %s, center arc %s\n", print_arc_string(a).c_str(), print_arc_string(b).c_str(), print_arc_string(center).c_str()); 
+#endif      
+
+    if (oD > 0) {
+      moveAdjBefore(a, center);
+      moveAdjAfter(b, center);
+    } else {
+      moveAdjAfter(a, center);
+      moveAdjBefore(b, center);
+    }
+
+#if DEBUG
+    print_local_emb(u);
+#endif      
+  }
+}
+
 void Slice::set_embedding(EdgeArray<int> & signature)
 {
 #if DEBUG
   printf("Slice::set_embedding\n");
 #endif      
-
   signature.init(*mOrig, 1);
 
-  AdjEntryArray<adjEntry> pairs(*this, 0);
-  AdjEntryArray<int> signs(*this, 0);
-  AdjEntryArray<int> dirs(*this, 0);
+  add_centers();
+  test_planarity_with_embedding(*this);
+
+  AdjEntryArray<adjEntry> lpair(*this, 0);
+  AdjEntryArray<adjEntry> rpair(*this, 0);
+  AdjEntryArray<int> lsign(*this, 1);
+  AdjEntryArray<int> rsign(*this, 1);
 
   for(int i=0; i<mDiskNum; i++) {
     Disk * D = mDisks[i];
     if (D->has_pair() && D->mId < D->pair()->mId) {
-      int oA = disk_orientation(D);
-      int oB = disk_orientation(D->pair());
-      assert(oA && oB);
+      D->mClockwise = disk_orientation(D);
+#if DEBUG
+      printf("Disk A orientation: %d\n", D->mClockwise);
+#endif
+      check_disk_embedding(D, D->mClockwise);
+
+      D->pair()->mClockwise = disk_orientation(D->pair());
+#if DEBUG
+      printf("Disk B orientation: %d\n", D->pair()->mClockwise);
+#endif
+      check_disk_embedding(D->pair(), D->pair()->mClockwise);
+
+      int pairing = D->pairing_sign();
+      assert(D->mClockwise && D->pair()->mClockwise);
 
       int dsign;
-      if (oA != oB)
+      if (D->mClockwise != D->pair()->mClockwise*pairing)
 	dsign = 1;
       else
 	dsign = -1;
@@ -2291,7 +2409,6 @@ void Slice::set_embedding(EdgeArray<int> & signature)
       if (mOrientable && dsign < 0) {
 	flip_disk(D);
 	dsign = 1;
-	oB = -oB;
       }
 
       if (dsign < 0) {
@@ -2325,33 +2442,46 @@ void Slice::set_embedding(EdgeArray<int> & signature)
       }
 
 #if DEBUG
-      printf("Pairing disks %d, %d of orientations %d, %d => sign %d\n", D->mId, D->pair()->mId, oA, oB, dsign);
+      printf("Pairing disks %d, %d of orientations %d, %d => sign %d\n", D->mId, D->pair()->mId, D->mClockwise, D->pair()->mClockwise, dsign);
 #endif      
 
-      ListIterator<adjEntry> itp = D->pair()->mOrient.begin();
-      forall_listiterators(adjEntry, it, D->mOrient) { //!!! Pairing can break if the disks are reoriented
+      forall_listiterators(adjEntry, it, D->mOrient) {
 	adjEntry a = *it;
-	adjEntry b = *itp;
-	
-	pairs[a] = b;
-	pairs[b] = a;
-	pairs[a->twin()] = b->twin();
-	pairs[b->twin()] = a->twin();
+	node u = a->theNode();
+	node v = D->mNodePairs[u];
+	adjEntry b;
+	if (pairing > 0)
+	  b = D->pair()->arc(v);
+	else
+	  b = D->pair()->prev_arc(v);
+
 #if DEBUG
 	printf("Pairing arcs %d->%d and %d->%d\n", a->theNode()->index(), a->twinNode()->index(), b->theNode()->index(), b->twinNode()->index());
 #endif      
 
-	signs[a] = dsign;
-	signs[b] = dsign;
-	signs[a->twin()] = dsign;
-	signs[b->twin()] = dsign;
+	if (D->mClockwise < 0) {
+	  lpair[a] = b;
+	  lsign[a] = dsign;
+	  rpair[a->twin()] = b->twin();
+	  rsign[a->twin()] = dsign;
+	} else {
+	  rpair[a] = b;
+	  rsign[a] = dsign;
+	  lpair[a->twin()] = b->twin();
+	  lsign[a->twin()] = dsign;
+	}
 
-	dirs[a] = oA;
-	dirs[b] = oB;
-	dirs[a->twin()] = -oA;
-	dirs[b->twin()] = -oB;
-	
-	itp++;
+	if (D->pair()->mClockwise*pairing < 0) {
+	  lpair[b] = a;
+	  lsign[b] = dsign;
+	  rpair[b->twin()] = a->twin();
+	  rsign[b->twin()] = dsign;
+	} else {
+	  rpair[b] = a;
+	  rsign[b] = dsign;
+	  lpair[b->twin()] = a->twin();
+	  lsign[b->twin()] = dsign;
+	}
       }
     } 
 
@@ -2362,9 +2492,8 @@ void Slice::set_embedding(EdgeArray<int> & signature)
 #endif      
       
       int dsign = -1;
-      ListIterator<adjEntry> itp = D->mOrient.begin();
-      node v = mNodeOrig[(*itp)->theNode()];
-      assert(v);
+      node start = D->mOrient.front()->theNode();
+      assert(start);
 
       if (dsign < 0) {
 #if DEBUG
@@ -2414,48 +2543,44 @@ void Slice::set_embedding(EdgeArray<int> & signature)
       }
 
 #if DEBUG
-      printf("Pairing arcs in one-sided disk %d starting at %d\n", D->mId, v->index());
+      printf("Pairing arcs in one-sided disk %d starting at %d\n", D->mId, start->index());
 #endif      
-
-      while (itp.valid()) {
-	adjEntry a = *itp;
-	node u = mNodeOrig[a->theNode()];
-	
-	if (u == v)
-	  break;
-	itp++;
-      }
       
       forall_listiterators(adjEntry, it, D->mOrient) {
 	adjEntry a = *it;
-	adjEntry b = *itp;
+	node u = a->theNode();
+	node v = D->mNodePairs[u];
+	adjEntry b = D->pair()->arc(v);
 
-	if (mNodeOrig[a->theNode()] == v)
+	if (D->mNodePairs[u] == start)
 	  break;
 
-	pairs[a] = b;
-	pairs[b] = a;
-	pairs[a->twin()] = b->twin();
-	pairs[b->twin()] = a->twin();
 #if DEBUG
 	printf("Pairing arcs %d->%d and %d->%d\n", a->theNode()->index(), a->twinNode()->index(), b->theNode()->index(), b->twinNode()->index());
 #endif      
 
-	signs[a] = dsign;
-	signs[b] = dsign;
-	signs[a->twin()] = dsign;
-	signs[b->twin()] = dsign;
-
-	dirs[a] = o;
-	dirs[b] = o;
-	dirs[a->twin()] = -o;
-	dirs[b->twin()] = -o;
-
-	itp++;
+	if (o < 0) {
+	  lpair[a] = b;
+	  lsign[a] = dsign;
+	  rpair[a->twin()] = b->twin();
+	  rsign[a->twin()] = dsign;
+	} else {
+	  rpair[a] = b;
+	  rsign[a] = dsign;
+	  lpair[a->twin()] = b->twin();
+	  lsign[a->twin()] = dsign;
+	}
       }
       
     }
   }
+
+  remove_centers();
+
+#if DEBUG
+  printf("Setting embedding\n");
+  print_emb(*this);
+#endif
 
   NodeArray<int> oriented(*mOrig, 0);
 
@@ -2488,16 +2613,14 @@ void Slice::set_embedding(EdgeArray<int> & signature)
     edge f = start;
     int sign = 1;
 
-#if DEBUG
     int numsteps = 0;
-#endif
 
     do {
       adjEntry orig = get_adj(f, v);
       assert(orig);
 
 #if DEBUG
-      printf("At %d->%d (dirs %d), original %d->%d, sign %d\n", a->theNode()->index(), a->twinNode()->index(), dirs[a], orig->theNode()->index(), orig->twinNode()->index(), sign);
+      printf("At %d->%d, original %d->%d, sign %d\n", a->theNode()->index(), a->twinNode()->index(), orig->theNode()->index(), orig->twinNode()->index(), sign);
 #endif
 
       if (last)
@@ -2505,12 +2628,22 @@ void Slice::set_embedding(EdgeArray<int> & signature)
 
       last = orig;
 
-      if (pairs[a] && dirs[a] != sign) {
+      while ((sign > 0 && rpair[a]) || (sign < 0 && lpair[a])) {
+	if (sign > 0 && rpair[a]) {
 #if DEBUG
-	printf("Switching to %d->%d (dirs %d, signs %d)\n", pairs[a]->theNode()->index(), pairs[a]->twinNode()->index(), dirs[a], signs[a]);
+	  printf("Switching to %d->%d (sign %d)\n", rpair[a]->theNode()->index(), rpair[a]->twinNode()->index(), rsign[a]);
 #endif
-	a = pairs[a];
-	sign = sign * signs[a];
+	  a = rpair[a];
+	  sign = sign * rsign[a];
+	}
+	
+	if (sign < 0 && lpair[a]) {
+#if DEBUG
+	  printf("Switching to %d->%d (sign %d)\n", lpair[a]->theNode()->index(), lpair[a]->twinNode()->index(), lsign[a]);
+#endif
+	  a = lpair[a];
+	  sign = sign * lsign[a];
+	}
       }
 
       if (sign > 0)
@@ -2521,12 +2654,15 @@ void Slice::set_embedding(EdgeArray<int> & signature)
       f = mEdgeOrig[a->theEdge()];
       assert(f);
 
-#if DEBUG
       if (numsteps++ > numberOfNodes()) {
+#if DEBUG
 	printf("Infinite cycle\n");
+#else
+	fprintf(stderr, "Infinite cycle\n");
+#endif
 	break;
       }
-#endif
+
 
     } while (f != start);
   }
@@ -2544,16 +2680,16 @@ adjEntry Slice::find_adj(node u, node v)
 
 //----------------------- Embedder --------------------------------------
 
-Embedder::Embedder(const Graph & G): Graph(G), mSlice(0), mSignature(*this, 0)
+Embedder::Embedder(const Graph & G): Graph(G), mSlice(0), mSliceEmb(0), mSignature(*this, 0)
 {
 }
 
-Embedder::Embedder(const Graph & G, NodeArray< node > & mapNode, EdgeArray< edge > & mapEdge): mSlice(0), mSignature(*this, 0)
+Embedder::Embedder(const Graph & G, NodeArray< node > & mapNode, EdgeArray< edge > & mapEdge): mSlice(0), mSliceEmb(0), mSignature(*this, 0)
 {
   construct(G, mapNode, mapEdge);
 }
 
-Embedder::Embedder(const Embedder & G): Graph(G), mSlice(G.mSlice), mSignature(*this, 0)
+Embedder::Embedder(const Embedder & G): Graph(G), mSlice(G.mSlice), mSliceEmb(0), mSignature(*this, 0)
 {
   
 }
@@ -2589,6 +2725,7 @@ int Embedder::set_embedding(Slice * slice)
     return 0;
 
   slice->set_embedding(mSignature);
+  mSliceEmb = slice;
 
   return 1;
 }
@@ -2625,16 +2762,20 @@ adjEntry Embedder::face_construct_step(adjEntry & a, int & sign, Face & F)
   F.mEdges.pushBack(a->theEdge());
   if (sign > 0)
     F.mAdj.pushBack(a);
-  else
-    mLeft[a] = F.mId;
+  else {
+    mLeft[a] = F.id();
+    mLeftFace[a] = &F;
+  }
 
   adjEntry b = a->twin();
   sign = sign * mSignature[a->theEdge()];
   
   if (sign < 0)
     F.mAdj.pushBack(b);
-  else
-    mLeft[b] = F.mId;
+  else {
+    mLeft[b] = F.id();
+    mLeftFace[b] = &F;
+  }
 
   if (sign > 0)
     a = b->cyclicSucc();
@@ -2696,6 +2837,9 @@ int Embedder::compute_faces()
 #if DEBUG
   printf("Embedder::compute_faces\n");
 #endif      
+  
+  if (!mSliceEmb)
+    set_embedding();
 
   mFaceInc.init(*this, 0);
 
@@ -2729,14 +2873,36 @@ int Embedder::construct_faces()
   compute_faces();
 
   mLeft.init(*this, 0);
-  mFaces.init(mFaceNum);
-  int f = 0;
+  mLeftFace.init(*this, 0);
+  int seen[mFaceNum];
+  for (int i=0; i<mFaceNum; i++)
+    seen[i] = 0;
+
+  int f;
   edge e;
   forall_edges(e, *this) {
-    if (mFaceInc[e->adjSource()] == f)
-      face_construct(e->adjSource(), mFaces[f++]);
-    if (mFaceInc[e->adjTarget()] == f)
-      face_construct(e->adjTarget(), mFaces[f++]);
+    f = mFaceInc[e->adjSource()];
+    if (!seen[f]) {
+      seen[f] = 1;
+      Face F;
+      face_construct(e->adjSource(), F);
+      mFaces.pushBack(F);
+    }
+    f = mFaceInc[e->adjTarget()];
+    if (!seen[f]) {
+      seen[f] = 1;
+      Face F;
+      face_construct(e->adjTarget(), F);
+      mFaces.pushBack(F);
+    }
+  }
+
+  Face * F = NULL;
+  forall_listiterators(Face, it, mFaces) {
+    Face * G = (Face *)&(*it);
+    if (F) 
+      F->mNext = G;
+    F = G;
   }
   return mFaceNum;
 }
@@ -2764,8 +2930,8 @@ int Embedder::genus()
 Face & Embedder::neighbor_face(Face & F, edge e) 
 {
   int f = mFaceInc[e->adjSource()];
-  if (f == F.mId)
-    return mFaces[mLeft[e->adjSource()]];
+  if (f == F.id())
+    return *mLeftFace[e->adjSource()];
   else
     return F;
 }
@@ -2822,8 +2988,9 @@ int Embedder::unique_emb(edge e, edge f)
 int Embedder::compute_singularities()
 {
   int res = 0;
-  for (int i=0; i<mFaceNum; i++)
-    res += mFaces[i].compute_singularities();
+  Face * F;
+  forall_emb_faces(F, *this)
+    res += F->compute_singularities();
 
   return res;
 }
@@ -2838,6 +3005,13 @@ int Embedder::check_embedding(int gen, int orientable)
   assert(genus() == gen);
 
   return 1;
+}
+
+int Embedder::compute_genus()
+{
+  compute_faces();
+  
+  return genus();
 }
 
 int Embedder::orientable_emb()
@@ -2856,6 +3030,7 @@ void Face::init(Embedder * G, int id)
 {
   mGraph = G;
   mId = id;
+  mNext = NULL;
 }
 
 int Face::compute_singularities() 

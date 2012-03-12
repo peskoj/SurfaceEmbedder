@@ -3,5 +3,7 @@
 #Ignore objects
 *.o
 
-#ignore emacs temp files
+#ignore emacs and Mac temp files
 *~
+[.]_*
+
