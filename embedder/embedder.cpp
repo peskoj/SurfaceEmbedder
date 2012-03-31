@@ -1618,8 +1618,12 @@ Disk * Slice::is_center(node v)
 {
   if (mDiskNodes[v].size() != 1)
     return NULL;
+
+  Disk * D = mDiskNodes[v].front();
+  if (D->center() == v)
+    return D;
   else
-    return mDiskNodes[v].front();
+    return NULL;
 }
 
 
@@ -2297,8 +2301,13 @@ void Slice::flip_disk(Disk * D)
 #endif      
       reverseAdjEdges(u);
       Disk * F;
-      if ((F = is_center(u)))
+      F = is_center(u);
+      if (F) {
+#if DEBUG
+	printf("Flipping rotation of disk %d\n", F->id());
+#endif      
 	F->mClockwise = -F->mClockwise;
+      }
       continue;
     }
 
@@ -2376,6 +2385,9 @@ void Slice::set_embedding(EdgeArray<int> & signature)
 
   add_centers();
   test_planarity_with_embedding(*this);
+#if DEBUG
+  print_emb(*this);
+#endif      
 
   AdjEntryArray<adjEntry> lpair(*this, 0);
   AdjEntryArray<adjEntry> rpair(*this, 0);
@@ -2398,6 +2410,9 @@ void Slice::set_embedding(EdgeArray<int> & signature)
       check_disk_embedding(D->pair(), D->pair()->mClockwise);
 
       int pairing = D->pairing_sign();
+#if DEBUG
+      printf("Disks pairing: %d\n", pairing);
+#endif
       assert(D->mClockwise && D->pair()->mClockwise);
 
       int dsign;
@@ -2614,6 +2629,7 @@ void Slice::set_embedding(EdgeArray<int> & signature)
     int sign = 1;
 
     int numsteps = 0;
+    int limit = numberOfNodes()*2;
 
     do {
       adjEntry orig = get_adj(f, v);
@@ -2644,6 +2660,8 @@ void Slice::set_embedding(EdgeArray<int> & signature)
 	  a = lpair[a];
 	  sign = sign * lsign[a];
 	}
+	if (numsteps++ > limit)
+	  break;
       }
 
       if (sign > 0)
@@ -2654,7 +2672,7 @@ void Slice::set_embedding(EdgeArray<int> & signature)
       f = mEdgeOrig[a->theEdge()];
       assert(f);
 
-      if (numsteps++ > numberOfNodes()) {
+      if (numsteps++ > limit) {
 #if DEBUG
 	printf("Infinite cycle\n");
 #else

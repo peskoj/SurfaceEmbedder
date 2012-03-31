@@ -30,7 +30,6 @@ int test_embeddable(Graph & G)
       if (orientable)
 	assert(E.orientable_emb() == orientable);
     }
-  }
 #endif
   return res;
 }

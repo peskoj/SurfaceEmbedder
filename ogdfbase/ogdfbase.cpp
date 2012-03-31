@@ -485,40 +485,76 @@ inline int getFlow(edge e, node v, EdgeArray<int> & flow)
   return (flow[e]*(2*(e->source() == v) - 1));
 }
 
-int flow_BFS(Graph & G, node a, node b, NodeArray<int> & visited, NodeArray<edge> & reached, NodeArray<int> & used, EdgeArray<int> & flow)
+int flow_BFS(Graph & G, node a, node b, NodeArray<int> & visited, NodeArray<edge> & reached, NodeArray<edge> & hreached, NodeArray<int> & used, EdgeArray<int> & flow)
 {
-  int n = G.numberOfNodes();
+  int n = G.numberOfNodes()*2;
   Array<node> queue(n);
+  Array<int> head(n);
+  NodeArray<int> vhead(G, 0);
   int ql, qr;
 
   queue[0] = a;
+  head[0] = 1;
   visited[a] = 1;
+  vhead[a] = 1;
   ql = 0;
   qr = 1;
   while (ql < qr && !visited[b]) {
+    int h = head[ql];
     node u = queue[ql++];
-    
+
+#if DEBUG_FLOW
+    printf("At node %d head %d, used %d, visited %d, vhead %d\n", u->index(), h, used[u], visited[u], vhead[u]);
+#endif
+
     edge e;
     forall_adj_edges(e, u) {
       node v = e->opposite(u);
 
-      if (visited[v])
-	continue;
-
 #if DEBUG_FLOW 
-      if (used[v])
-	printf("Testing flow %d[%d] %d[%d]: %d\n", u->index(), used[u], v->index(), used[v], getFlow(e, u, flow)); 
+      printf("Probing node %d, visited %d, vhead %d, used %d, with flow %d\n", v->index(), visited[v], vhead[v], used[v], getFlow(e, u, flow)); 
 #endif
+      
+      int f = getFlow(e, u, flow);
+      // if (f > 0)
+      // 	continue;
 
-      if (getFlow(e, u, flow) > 0)
+      if (h && (visited[v] || f))
 	continue;
 
-      if (used[u] && !getFlow(reached[u], u, flow) && !getFlow(e, u, flow))
+      if (!h && (vhead[v] || f >= 0))
 	continue;
 
+      // if (used[u] && !getFlow(reached[u], u, flow) && !getFlow(e, u, flow))
+      // 	continue;
+
+      head[qr] = !h;
       queue[qr++] = v;
-      visited[v] = 1;
-      reached[v] = e;
+      if (h) {
+	visited[v] = 1;
+	reached[v] = e;
+      } else {
+	vhead[v] = 1;
+	hreached[v] = e;
+      }
+
+#if DEBUG 
+      printf("Adding node %d\n", v->index()); 
+#endif
+    }
+
+    if (h && !visited[u]) {
+      visited[u] = 1;
+      head[qr] = 0;
+      queue[qr++] = u;
+      reached[u] = NULL;
+    }
+
+    if (!h && !vhead[u] && !used[u]) {
+      vhead[u] = 1;
+      head[qr] = 1;
+      queue[qr++] = u;
+      hreached[u] = NULL;
     }
   }
 
@@ -532,32 +568,44 @@ int shortest_path(Graph & G, node a, node b, NodeArray<int> & used, EdgeArray<in
 
   NodeArray<int> visited(G, 0);
   NodeArray<edge> reached(G, 0);
+  NodeArray<edge> hreached(G, 0);
 
-  flow_BFS(G, a, b, visited, reached, used, flow);
+  flow_BFS(G, a, b, visited, reached, hreached, used, flow);
 
   if (!visited[b])
     return 0;
 
   node u = reached[b]->opposite(b);
-  edge old = reached[b];
-  edge e = reached[u];
+  int head = 1;
   while (u != a) {
-    if (flow[e]) {
-      flow[e] = 0;
-      if (!flow[old])
-	used[u] = 0;
-    } else {
-      flow[e] += 2*(e->target() == u) - 1;
-      used[u] = 1;
+    edge e;
+    if (head) 
+      e = hreached[u];
+    else
+      e = reached[u];
+
+    if (!e) {
+      used[u] = !used[u];
+      head = !head;
+      continue;
     }
 
+    if (flow[e]) 
+      flow[e] = 0;
+    else 
+      flow[e] += 2*(e->target() == u) - 1;
+    
 #if DEBUG_FLOW
     printf("Flow %d %d: %d\n", e->source()->index(), e->target()->index(), flow[e]); 
 #endif
 
     u = e->opposite(u);
-    old = e;
-    e = reached[u];
+    if (head) 
+      e = hreached[u];
+    else 
+      e = reached[u];
+
+    head = !head;
   }
 
   return 1;
@@ -572,10 +620,15 @@ int min_cut(Graph & G, node a, node b, NodeArray<int> & cut)
   while (shortest_path(G, a, b, used, flow))
     s++;
 
+#if DEBUG
+  printf("Determining min cut of size %d\n", s); 
+#endif
+
   NodeArray<edge> reached(G, 0);
+  NodeArray<edge> hreached(G, 0);
   cut.init(G, 0);
 
-  flow_BFS(G, a, b, cut, reached, used, flow);
+  flow_BFS(G, a, b, cut, reached, hreached, used, flow);
   
   return s;
 }
