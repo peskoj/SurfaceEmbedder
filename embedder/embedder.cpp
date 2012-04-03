@@ -46,7 +46,7 @@ Disk::Disk(Slice & S, const Disk & D, NodeArray<node> & vCopy, EdgeArray<edge> &
   mId = D.mId;
   mGroup = D.mGroup;
   mSymmetry = D.mSymmetry;
-  mPair = 0;
+  mPair = NULL;
 
   mNodePairs.init(S, 0);
   mSide.init(S, 0);
@@ -2393,6 +2393,7 @@ void Slice::set_embedding(EdgeArray<int> & signature)
   AdjEntryArray<adjEntry> rpair(*this, 0);
   AdjEntryArray<int> lsign(*this, 1);
   AdjEntryArray<int> rsign(*this, 1);
+  NodeArray<int> vsign(*this, 1);
 
   for(int i=0; i<mDiskNum; i++) {
     Disk * D = mDisks[i];
@@ -2501,10 +2502,11 @@ void Slice::set_embedding(EdgeArray<int> & signature)
     } 
 
     if (!D->has_pair()) {
-      int o = disk_orientation(D);
+      D->mClockwise = disk_orientation(D);
 #if DEBUG
-      printf("Disk %d has orientation %d\n", D->id(), o);
+      printf("Disk %d has orientation %d\n", D->id(), D->mClockwise);
 #endif      
+      check_disk_embedding(D, D->mClockwise);
       
       int dsign = -1;
       node start = D->mOrient.front()->theNode();
@@ -2524,16 +2526,18 @@ void Slice::set_embedding(EdgeArray<int> & signature)
 #endif      
 	assert(signature[start] > 0); //Changing signature twice, is it ok?
 	signature[start] = -signature[start];
-	
-	forall_listiterators(adjEntry, it, D->mOrient) {
-	  edge e = (*it)->theEdge();
-	  edge f = mEdgeOrig[e];
-	  if (f == start)
-	    break;
+	node first = a->twinNode();
+	node pair = D->mNodePairs[first];
+	node u;
 
-	  node u = (*it)->twinNode();
-	  if (u->index() > D->mNodePairs[u]->index())
-	    continue;
+	for(u = first; u != pair; u = D->next(u)) {
+#if DEBUG
+	  printf("(%d)", u->index());
+#endif      
+// 	  if (u->index() > D->mNodePairs[u]->index()) //??? What's this?
+// 	    continue;
+	  
+	  vsign[u] = -vsign[u];
 
 	  edge h;
 	  forall_adj_edges(h, u) {
@@ -2547,7 +2551,7 @@ void Slice::set_embedding(EdgeArray<int> & signature)
 	    print_edge(f);
 #endif      
 
-	    assert(signature[f] > 0); //Changing signature twice, is it ok?
+	    // assert(signature[f] > 0); //Changing signature twice, is it ok?
 
 	    signature[f] = -signature[f];
 	  }
@@ -2565,7 +2569,7 @@ void Slice::set_embedding(EdgeArray<int> & signature)
 	adjEntry a = *it;
 	node u = a->theNode();
 	node v = D->mNodePairs[u];
-	adjEntry b = D->pair()->arc(v);
+	adjEntry b = D->arc(v);
 
 	if (D->mNodePairs[u] == start)
 	  break;
@@ -2574,7 +2578,7 @@ void Slice::set_embedding(EdgeArray<int> & signature)
 	printf("Pairing arcs %d->%d and %d->%d\n", a->theNode()->index(), a->twinNode()->index(), b->theNode()->index(), b->twinNode()->index());
 #endif      
 
-	if (o < 0) {
+	if (D->mClockwise < 0) {
 	  lpair[a] = b;
 	  lsign[a] = dsign;
 	  rpair[a->twin()] = b->twin();
@@ -2584,6 +2588,18 @@ void Slice::set_embedding(EdgeArray<int> & signature)
 	  rsign[a] = dsign;
 	  lpair[a->twin()] = b->twin();
 	  lsign[a->twin()] = dsign;
+	}
+
+	if (D->mClockwise < 0) {
+	  lpair[b] = a;
+	  lsign[b] = dsign;
+	  rpair[b->twin()] = a->twin();
+	  rsign[b->twin()] = dsign;
+	} else {
+	  rpair[b] = a;
+	  rsign[b] = dsign;
+	  lpair[b->twin()] = a->twin();
+	  lsign[b->twin()] = dsign;
 	}
       }
       
@@ -2626,7 +2642,7 @@ void Slice::set_embedding(EdgeArray<int> & signature)
     edge start = mEdgeOrig[a->theEdge()];
     assert(start);
     edge f = start;
-    int sign = 1;
+    int sign = vsign[u];
 
     int numsteps = 0;
     int limit = numberOfNodes()*2;

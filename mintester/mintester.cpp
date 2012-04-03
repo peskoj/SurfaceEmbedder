@@ -14,6 +14,17 @@ int tdel = 1; //test deletion
 int genus = 2; //euler genus (2x orientable genus)
 int orientable = 1; //+1 orientable, -1 non-orientable, 0 Euler genus
 int testall = 0; //test all edges for deletion/contraction
+vector< pair<int,int> > fix;
+
+int fixed_edge(edge e) 
+{
+  trace(fix, p) {
+    if ((p->first == e->source()->index() && p->second == e->target()->index()) ||
+	(p->first == e->target()->index() && p->second == e->source()->index()))
+      return 1;
+  }
+  return 0;
+}
 
 int test_embeddable(Graph & G)
 {
@@ -48,6 +59,8 @@ int test_deletion(Graph & G)
   forall_listiterators(edge, it, edges) {
     e = *it;
     assert(e);
+    if (fixed_edge(e))
+      continue;
     node u = e->source();
     node v = e->target();
 
@@ -99,6 +112,8 @@ int test_contraction(Graph & H)
   edge f;
   int ec = 0;
   forall_edges(f, H) {
+    if (fixed_edge(f))
+      continue;
     GraphCopySimple G(H);
     
     edge e = G.copy(f);
@@ -135,11 +150,16 @@ int main(int argc, char ** argv)
 {
 
   int c;
-  while ((c = getopt (argc, argv, "acdCDg:o:")) != -1)
+  while ((c = getopt (argc, argv, "acdCDg:o:e:")) != -1)
     switch (c)
       {
       case 'a':
 	testall = 1;
+	break;
+      case 'e':
+	int x, y;
+	sscanf(optarg, "%d %d", &x, &y);
+	fix.push_back(pair<int,int>(x,y));
 	break;
       case 'c':
 	tcont = 1;
@@ -175,7 +195,17 @@ int main(int argc, char ** argv)
       }
 
 
-  fprintf(stderr, "Testing for minimality: genus %d, orientable: %d, testing deletion: %d, testing contraction: %d\n", genus, orientable, tdel, tcont);
+  fprintf(stderr, "Testing for minimality: genus %d, orientable: %d, testing deletion: %d, testing contraction: %d, fixed edges: %d\n", 
+	  genus, orientable, tdel, tcont, fix.size());
+#if VERBOSE
+  if (!fix.empty()) {
+    printf("Fixed edges:");
+    trace(fix, p) {
+      printf(" %d->%d", p->first, p->second);
+    }
+    printf("\n");
+  }
+#endif
 
   Graph G;
 

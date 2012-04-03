@@ -59,6 +59,7 @@
 #define VERBOSE 0
 #endif
 
+#define trace(CONTAINER, ITERATOR) for (typeof(CONTAINER.begin()) ITERATOR = CONTAINER.begin(); ITERATOR != CONTAINER.end(); ++ITERATOR)
 #define SWAP(X, Y, T) {T = X; X = Y; Y = T;}
 #define BIT(X, I) (((X) >> (I)) & 1)
 
