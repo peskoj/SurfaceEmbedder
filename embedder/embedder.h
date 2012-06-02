@@ -265,6 +265,7 @@ class Embedder: public Graph
   inline EdgeArray<int> & signature() { return mSignature; }
 
   int genus();
+  int min_genus(int orientable, int maximum = 3);
   int compute_genus();
   int numberOfFaces();
   int compute_faces();

@@ -11,7 +11,6 @@
 #include <vector>
 #include <assert.h>
 
-
 #ifndef MAXK
 #define MAXK 10
 #endif
@@ -66,6 +65,7 @@
 //#define forall_slistiterators(type, it, L)  for (SListConstIterator< type > it = (L).begin(); it.valid(); ++it)
 #define PRINT_BIN(X, N) for(int _i=0; _i< (N); _i++) {printf("%d", X & 1); X /= 2;}
 
+typedef unsigned int uint;
 
 using namespace std;
 

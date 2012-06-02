@@ -2738,7 +2738,7 @@ int Embedder::planar()
 {
   return test_planarity(*this);
 }
- 
+
 int Embedder::embed(int genus, int orientable)
 {
   Slice * S = new Slice(*this);
@@ -2748,6 +2748,26 @@ int Embedder::embed(int genus, int orientable)
     delete S;
 
   return !!mSlice;
+}
+
+int Embedder::min_genus(int orientable, int maximum)
+{
+#if DEBUG
+  printf("Determining minimum genus: orientable %d, maximum %d\n", orientable, maximum);
+#endif
+
+  if (planar()) //!!! What about non-orientable genus?
+    return 0;
+
+  int g =  1;
+  for (g = 1; g<maximum; g++) {
+#if DEBUG
+    printf("Testing embedability into genus %d\n", g);
+#endif
+    if (embed(g, orientable))
+      return g;
+  }
+  return g;
 }
 
 int Embedder::set_embedding(Slice * slice)
