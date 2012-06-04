@@ -9,6 +9,29 @@ BoyerMyrvold BM;
 int planarcount = 0;
 #endif
 
+//------------------------------------ small functions ------------------------------
+
+int int_cmp(const void * a, const void * b)
+{
+  return *((int*)a) - *((int*)b);
+}
+
+int cycle_cmp(const void * a, const void * b)
+{
+  return ((List<edge>*)a)->size() - ((List<edge>*)b)->size();
+}
+
+int value_function(int x)
+{
+  //1 << (cycles[i]-3); old exponential function
+  return x*x*x;
+}
+
+bool cycle_cmp_bool(const Cycle & a, const Cycle & b)
+{
+  return a.size() < b.size();
+}
+
 
 int edgecmp(const void * px, const void * py) {
   edge x = *((edge *)(px));
@@ -101,14 +124,14 @@ void print_edge_list(SListPure<edge> & list)
   printf("\n");
 }
 
-void print_edge_list(List<edge> & list)
+void print_edge_list(const List<edge> & list)
 {
   forall_listiterators(edge, it, list)
     print_edge(*it);
   printf("\n");
 }
 
-void print_node_list(List<node> & list, int linebreak)
+void print_node_list(const List<node> & list, int linebreak)
 {
   forall_listiterators(node, it, list)
     printf(" %d", (*it)->index());
@@ -786,6 +809,19 @@ node BFS(Graph & G, node source, NodeArray<int> & visited, NodeArray<int> & targ
   return 0;
 }
 
+void construct_path(node source, node sink, NodeArray<adjEntry> & dir, List<edge> & path)
+{
+  node u = source;
+  int count = 0;
+  while (u != sink) {
+    assert(dir[u]);
+    path.pushBack(dir[u]->theEdge());
+    u = dir[u]->twinNode();
+
+    assert(count++ < 1000); //Infinite cycle protection
+  }
+}
+
 node BFS_subgraph(Graph & G, EdgeArray<int> & div, int subg, node source, NodeArray<int> & visited, int color, NodeArray<int> & target, NodeArray<adjEntry> & path, int shortest_only = 1)
 {
 // #if DEBUG
@@ -1112,7 +1148,7 @@ int checkpairs(vector<IntPair> & pairs, vector<adjEntry> &halfedges, NodeArray<i
 //------------------------ Non-contractible cycles ----------------------------------
 
 
-void kuratowski_nodes(KuratowskiSubdivision & S, node * nodes, int isK33)
+void kuratowski_nodes(KuratowskiSubdivision & S, vector<node> & nodes, int isK33)
 {
 #if (DEBUG)
   printf("In kuratowski_nodes\n");

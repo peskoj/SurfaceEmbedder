@@ -58,7 +58,8 @@
 #define VERBOSE 0
 #endif
 
-#define trace(CONTAINER, ITERATOR) for (typeof(CONTAINER.begin()) ITERATOR = CONTAINER.begin(); ITERATOR != CONTAINER.end(); ++ITERATOR)
+#define trace(ITERATOR, CONTAINER) for (typeof((CONTAINER).begin()) ITERATOR = (CONTAINER).begin(); ITERATOR != (CONTAINER).end(); ++ITERATOR)
+#define trace_while(ITERATOR, CONTAINER) typeof((CONTAINER).begin()) ITERATOR = (CONTAINER).begin(); while (ITERATOR != (CONTAINER).end())
 #define SWAP(X, Y, T) {T = X; X = Y; Y = T;}
 #define BIT(X, I) (((X) >> (I)) & 1)
 
@@ -87,6 +88,13 @@ const string strcorrect[2] = {"wrong", "correct"};
     X.clear();								\
     for (int _j=0; _j < Y; _j++)					\
       append_cycle(X, W, EDGES[_a[_j*2]][_a[_j*2+1]], REV[_a[_j*2]][_a[_j*2+1]]); \
+  }
+#define CONSTRUCT_CYCLE_LIST(W, X, Y, EDGES, REV, Z...)  {		\
+    int _a[2*Y] = {Z};							\
+    Cycle * C = new Cycle();						\
+    X.push_back(C);							\
+    for (int _j=0; _j < Y; _j++)					\
+      append_cycle(*C, W, EDGES[_a[_j*2]][_a[_j*2+1]], REV[_a[_j*2]][_a[_j*2+1]]); \
   }
 #define EVAL(W, X, Y, Z...)  { int _a[Y] = {Z}; X = sum_lengths(W, _a, Y); }
 
@@ -317,24 +325,12 @@ class GraphCutter: public GraphCopySimple
 
 };
 
+//---------------- small functions ---------------------------------------
 
-//------------------- Static functions -----------------------------------
-
-static int int_cmp(const void * a, const void * b)
-{
-  return *((int*)a) - *((int*)b);
-}
-
-static int cycle_cmp(const void * a, const void * b)
-{
-  return ((List<edge>*)a)->size() - ((List<edge>*)b)->size();
-}
-
-inline int value_function(int x)
-{
-  //1 << (cycles[i]-3); old exponential function
-  return x*x*x;
-}
+int int_cmp(const void * a, const void * b);
+int cycle_cmp(const void * a, const void * b);
+int value_function(int x);
+bool cycle_cmp_bool(const Cycle & a, const Cycle & b);
 
 
 //------------------- Exported functions ---------------------------------
@@ -347,8 +343,8 @@ void print_arc(adjEntry a);
 char * print_arc_str(adjEntry a);
 string print_arc_string(adjEntry a);
 void print_edge_list(SListPure<edge> & list);
-void print_edge_list(List<edge> & list);
-void print_node_list(List<node> & list, int linebreak = 1);
+void print_edge_list(const List<edge> & list);
+void print_node_list(const List<node> & list, int linebreak = 1);
 void print_subdivision(KuratowskiSubdivision & S);
 void print_graph(Graph & G);
 void print_graph(Graph & G, NodeArray<int> & node_index);
@@ -378,10 +374,11 @@ int k_connected(Graph & G, node a, node b, int k);
 int color_comp(NodeArray<int> & nodes, EdgeArray<int> & edges, int subg, node v, int c);
 int two_con_comp(Graph & G, NodeArray<int> & nodes, int subg, NodeArray<int> & comps, node v);
 node BFS_subgraph(Graph & G, EdgeArray<int> & div, int subg, node source, NodeArray<int> & visited, int color, NodeArray<int> & target, NodeArray<adjEntry> & path, int shortest_only);
+void construct_path(node source, node sink, NodeArray<adjEntry> & dir, List<edge> & path);
 node BFS(Graph & G, node source, NodeArray<int> & visited, NodeArray<int> & target, NodeArray<adjEntry> & path);
 
 //----------- Kuratowski graphs ---------------------------
-void kuratowski_nodes(KuratowskiSubdivision & S, node * nodes, int isK33);
+void kuratowski_nodes(KuratowskiSubdivision & S, vector<node> & nodes, int isK33);
 int best_k_graph(Graph & G, KuratowskiWrapper & R);
 
 

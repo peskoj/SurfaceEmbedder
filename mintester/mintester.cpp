@@ -18,7 +18,7 @@ vector< pair<int,int> > fix;
 
 int fixed_edge(edge e) 
 {
-  trace(fix, p) {
+  trace(p, fix) {
     if ((p->first == e->source()->index() && p->second == e->target()->index()) ||
 	(p->first == e->target()->index() && p->second == e->source()->index()))
       return 1;
@@ -200,7 +200,7 @@ int main(int argc, char ** argv)
 #if VERBOSE
   if (!fix.empty()) {
     printf("Fixed edges:");
-    trace(fix, p) {
+    trace(p, fix) {
       printf(" %d->%d", p->first, p->second);
     }
     printf("\n");

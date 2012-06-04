@@ -5,6 +5,13 @@
 using namespace std;
 using namespace ogdf;
 
+//------------------------ utilities --------------------------------
+
+void print_emb(Embedder & E, int genus)
+{
+  print_emb(E, E.signature(), genus);
+}
+
 
 //----------------------- Disk ---------------------------------
 
@@ -186,9 +193,19 @@ int Disk::adjacent_nodes(node u, node v)
   return prev(u) == v || prev(v) == u;
 }
 
-void Disk::boundary(List<edge> & boundary, node u, node v) //!!!?
+void Disk::boundary(List<edge> & boundary, node start, node end) 
 {
+#if DEBUG
+  printf("Computing boundary between %d and %d\n", index(start), index(end));
+#endif
 
+  assert(next(end));
+  node u = start;
+  while (u != end) {
+    adjEntry a = arc(u);
+    boundary.pushBack(a->theEdge());
+    u = next(u);
+  }
 }
 
 int Disk::alternating(List<node> & a, node * b) //!!!?
@@ -217,6 +234,262 @@ node Disk::center()
 {
   return mCenter;
 }
+
+//------------------------ Obstruction -------------------------------------------------------------------
+Obstruction::Obstruction(): mValid(true)
+{
+}
+
+uint Obstruction::numCycles() 
+{
+  return mCycles.size();
+}
+
+Cycle & Obstruction::operator[](int i)
+{
+  assert(i >=0 && (uint)i < mCycles.size());
+
+  return mCycles[i];
+}
+
+int Obstruction::value()
+{
+  int val = 0;
+  trace(it, mCycles)
+    val += value_function(it->size());
+  
+  return val;
+}
+
+
+DisjointK23::DisjointK23(Slice * slice, KuratowskiSubdivision & S, int nind): Obstruction()
+{
+  init(slice, S, nind);
+}
+
+
+void DisjointK23::init(Slice * slice, KuratowskiSubdivision & S, int nind)
+{
+#if DEBUG
+  printf("Initializing a DisjointK23 obstruction\n");
+#endif
+
+  mValid = false;
+  mCycles.resize(3);
+
+  for (int j=0; j<3; j++) { //needs debugging
+    CONSTRUCT_CYCLE(S, mCycles[j], 4, k33_edges, k33_rev, (nind+1)%3 + (nind/3)*3, j, j + ((nind/3 + 1)%2)*3, 
+		    (nind+2)%3, (nind+2)%3 + (nind/3)*3, (j+1)%3, (j+1)%3 + ((nind/3+1)%2)*3, (nind+1)%3);
+  }
+
+  if (slice->disk_num()) {
+    trace_while(cyc, mCycles) {
+#if DEBUG
+      printf("Checking cycle");
+      print_edge_list(*cyc);
+#endif
+      trace(it, *cyc) {
+	edge e = *it;
+	int d = slice->disk_group(e);
+	if (d) {
+#if DEBUG
+	  printf("Erasing cycle that intersects disk group %d\n", d);
+#endif
+	  cyc = mCycles.erase(cyc);
+	  goto END;
+	}
+      }
+      ++cyc;
+    END:
+      continue;
+    }
+  }
+
+  if (mCycles.size() < 2)
+    return;
+
+  sort(mCycles.begin(), mCycles.end(), cycle_cmp_bool);
+
+  mCycles.resize(2);
+  mValid = true;
+}
+
+DisjointK4::DisjointK4(Slice * slice, KuratowskiSubdivision & S, int nind): Obstruction()
+{
+  init(slice, S, nind);
+}
+
+void DisjointK4::init(Slice * slice, KuratowskiSubdivision & S, int nind)
+{
+  mCycles.resize(4);
+  CONSTRUCT_CYCLE(S, mCycles[0], 3, k5_edges, k5_rev, 0, 0, 1, 1, 2, 0);
+  CONSTRUCT_CYCLE(S, mCycles[1], 3, k5_edges, k5_rev, 0, 0, 1, 2, 3, 0);
+  CONSTRUCT_CYCLE(S, mCycles[2], 3, k5_edges, k5_rev, 0, 1, 2, 2, 3, 0);
+  CONSTRUCT_CYCLE(S, mCycles[3], 3, k5_edges, k5_rev, 1, 1, 2, 2, 3, 1);
+}
+
+DiskEars::DiskEars(Slice * slice, Disk * disk, KuratowskiSubdivision & S, bool isK33): Obstruction()
+{
+  init(slice, disk, S, isK33);
+}
+
+void DiskEars::init(Slice * slice, Disk * disk, KuratowskiSubdivision & S, bool isK33)
+{ 
+#if DEBUG
+  printf("Initializing DiskEars obstruction for disk %d\n", disk->id());
+#endif
+  mValid = false;
+
+  EdgeArray<int> edges(*slice, 0);
+  vector<node> disk_nodes;
+
+  int count = 0;
+  forall_listiterators(adjEntry, it, disk->mOrient) {
+    adjEntry a = *it;
+    edge e = a->theEdge();
+    edges[e] += 1;
+  }
+
+  forall_listiterators(edge, it, disk->mCenterEdges) {
+    edge e = *it;
+    edges[e] += 2;
+  }
+
+  trace(lit, S) {
+    forall_listiterators(edge, it, *lit) {
+      edge e = *it;
+      if (edges[e])
+	count++;
+      
+      edges[e] += 4;    
+    }
+  }
+  
+#if DEBUG
+  printf("There are %d common edges\n", count);
+#endif
+  if (!count)
+    return;
+
+  forall_listiterators(adjEntry, it, disk->mOrient) {
+    adjEntry a = *it;
+    node u = a->theNode();
+    bool disknode = slice->incident(u, disk);
+    bool inside = true; 
+
+    edge e;
+    forall_adj_edges(e, u)
+      if (edges[e] == 4) {
+	inside = false;
+	break;
+      }
+    
+    if (disknode && !inside)
+      disk_nodes.push_back(u);
+  }
+
+#if DEBUG
+  printf("There are %lu branch nodes\n", disk_nodes.size());
+  trace(it, disk_nodes)
+    printf("%d ", index(*it));
+  printf("\n");
+#endif
+
+  NodeArray<int> terms(*slice, 0);
+  trace(it, disk_nodes)
+    terms[*it] = 1;
+
+  NodeArray< List<Path> > ears(*slice);
+
+  trace(it, disk_nodes) {
+    node u = *it;
+    NodeArray<int> visited(*slice, 0);
+    NodeArray<adjEntry> paths(*slice, 0);
+    BFS_subgraph(*slice, edges, 4, u, visited, 1, terms, paths, 0);
+
+    trace(vit, disk_nodes) {
+      node v = *vit;
+      if (u == v)
+	continue;
+      
+      List<edge> path;
+      
+      if (visited[v]) {
+	construct_path(v, u, paths, path);
+	ears[v].pushBack(Path(u, path));
+      }
+    } 
+  }
+  
+#if DEBUG
+  printf("Ears found:\n");
+  trace(uit, disk_nodes) {
+    node u = *uit;
+    printf("Ears at %d:\n", index(u));
+    forall_listiterators(Path, wit, ears[u]) {
+      printf("To %d:", index((*wit).first));
+      //      if ((*wit).second.size())
+      print_edge_list((*wit).second);
+    }
+  }
+#endif
+
+
+  NodeArray<int> reverse(*slice, 0);
+  for (int i=0; i<disk_nodes.size(); i++)
+    reverse[disk_nodes[i]] = i;
+
+  trace(uit, disk_nodes) {
+    node u = *uit;
+    int pu = reverse[u];
+
+    vector<node>::iterator vit = uit;
+    for (vit++; vit != disk_nodes.end(); ++vit) {
+      node v = *vit;
+      int pv = reverse[v];
+      assert(pu < pv);
+      
+      forall_nonconst_listiterators(Path, wit, ears[u]) {
+	node w = (*wit).first;
+	int pw = reverse[w];
+	if (pw <= pv)
+	  continue;
+
+	forall_nonconst_listiterators(Path, zit, ears[v]) {
+	  node z = (*zit).first;
+	  int pz = reverse[z];
+	  if (pz <= pw)
+	    continue;
+
+	  if (intersect((*wit).second, (*zit).second))
+	    continue;
+#if DEBUG
+	  printf("Disjoint ears found:\n");
+	  print_edge_list((*wit).second);
+	  print_edge_list((*zit).second);
+#endif
+	  
+	  mCycles.resize(1);
+	  if ((*zit).second.size() < (*wit).second.size()) {
+	    disk->boundary(mCycles[0], v, (*zit).first);
+	    mCycles[0].reverse();
+	    mCycles[0].conc((*zit).second);
+	  } else {
+	    disk->boundary(mCycles[0], u, (*wit).first);
+	    mCycles[0].reverse();
+	    mCycles[0].conc((*wit).second);
+	  }
+	  
+	  mValid = true;
+	  return;
+	  
+	}
+      }
+    }
+  }
+}
+
+
 
 //----------------------- Slice --------------------------------
 
@@ -373,8 +646,6 @@ void Slice::init(Graph & G)
   mDiskNodes.init(*this);
   mPoss.init(*this);
   //  mOut.init(*this);
-
-  //  mCycleData.mDisks.init(MAXGENUS*2+1);
 }
 
 void Slice::read_slice(Graph & G) 
@@ -537,20 +808,6 @@ void Slice::compute_disk_inc()
     }
   }
 }
-
-// void Slice::flood_fill_disk_pairs(node v, int part)
-// {
-//   mCopiesPart[v] = part;
-  
-//   forall_listiterators(*Disk, dit, mDiskNodes[v]) {
-//     Disk * D = *dit;
-//     node w = D->mNodePairs[v];
-//     assert(w);
-    
-//     if (!mCopiesPart[w])
-//       flood_fill_disk_pairs(w, part);
-//   }
-// }
 
 void Slice::compute_copies()
 {
@@ -804,174 +1061,53 @@ void Slice::copy_cycle(NodeArray<node> & vCopy, EdgeArray<edge> & eCopy, Cycle &
     assert(eCopy[e]); //will fail if the cycle is going through the centre
     Copy.pushBack(eCopy[e]);
   }
-  //  mCycleData = data;
 
 #if DEBUG
   printf("\n");
 #endif
-  
-//   if (!mCycleData.mSymmetry) { //if there are some disks touching
-//     mDiskLeft = Array<int>(mDiskNum+1);
-//     int last = 0;
-//     int first = 0;
-//     int i = 0;
-//     forall_listiterators(edge, it, C) {
-//       edge e = *it;
-//       int g = disk_group(e);
-//       if (g && (!first || g != last)) {
-// 	last = g;
-// 	if (first)
-// 	  break;
-// 	if (!first)
-// 	  first = g;
-
-// 	mDiskLeft[g-1] = mCycleData.mCode && (1<<i);
-// #if DEBUG
-// 	printf("Setting side to disk group %d to %d\n", g, 1<<i);
-// #endif
-// 	i++;
-//       }
-//     }
-//   }
 }
 
-// void Slice::show_unselected()
-// {
-//   if (!mUnselectedHidden)
-//     return;
-
-// #if DEBUG
-//   printf("Showing edges:");
-// #endif
-  
-//   node u;
-//   forall_nodes(u, *this) {
-//     forall_listiterators(edge, it, mOut[u]) {
-//       edge e = *it;
-//       edge f = mEdgeOrig[e];
-//       assert(f);
-
-//       if (mEmbedded[f])
-// 	continue;
-
-//       if (e->source() != u)
-// 	continue;
-
-//       restoreEdge(e);
-// #if DEBUG
-//       print_edge(e);
-// #endif
-//     }
-//   }
-
-// #if DEBUG
-//   printf("\n");
-// #endif
-
-//   mUnselectedHidden = 0;
-// }
-
-// void Slice::hide_unselected()
-// {
-//   if (mUnselectedHidden)
-//     return;
-
-// #if DEBUG
-//   printf("Hiding edges:");
-// #endif
-
-//   node u;
-//   forall_nodes(u, *this) {
-//     forall_listiterators(edge, it, mOut[u]) {
-//       edge e = *it;
-//       edge f = mEdgeOrig[e];
-//       assert(f);
-//       if (mEmbedded[f])
-// 	continue;
-
-//       if (e->source() != u)
-// 	continue;
-
-//       hideEdge(e);
-// #if DEBUG
-//       print_edge(e);
-// #endif
-//     }
-//   }
-
-// #if DEBUG
-//   printf("\n");
-// #endif
-
-//   mUnselectedHidden = 1;
-// }
-
-void Slice::kuratowski_analysis(KuratowskiSubdivision & S, int isK33, CycleData & cycledata)
+void Slice::kuratowski_analysis(KuratowskiSubdivision & S, int isK33, vector<Obstruction*> & obstructions)
 {
 #if DEBUG
   printf("Slice::In kuratowski_analysis\n");
 #endif
-  kuratowski_nodes(S, cycledata.mNodes, isK33);
+  vector<node> nodes(KURSIZE);
+  kuratowski_nodes(S, nodes, isK33);
 
+  if (isK33) {
+    for (int i=0; i<6; i++) {
+      DisjointK23 * H = new DisjointK23(this, S, i);
+      if (H->valid()) {
 #if DEBUG
-  printf("cycledata high %d, disks %d\n", cycledata.mCycleDisks.high(), mDiskNum);
+	printf("New obstruction found\n");
+	for (int j=0; (uint)j<H->numCycles(); j++)
+	  print_edge_list(H->cycle(j));
 #endif
-  assert(cycledata.mCycleDisks.high() >= mDiskNum);
-
-  cycledata.mIncNumber = 0;
-  cycledata.mCycleDisks.fill(0, mDiskNum-1, 0);
-
-  for (int i=0; i<9; i++) {
-#if DEBUG
-    printf("Edge %d:", i);
-#endif
-    forall_listiterators(edge, it, S[i]) {
-      edge e = *it;
-      int g = disk_group(e);
-      if (g){
-	cycledata.mCycleDisks[g-1]++;
-#if DEBUG
-	printf("%s in %d,%d", print_edge_str(e), mDiskInc[e->adjSource()]->id(), mDiskInc[e->adjTarget()]->id());
-#endif
-      }
+	obstructions.push_back(H);
+      } else
+	delete H;
     }
-#if DEBUG
-    printf("\n");
-#endif
+  } else {
+    for (int i=0; i<5; i++) {
+      DisjointK4 * H = new DisjointK4(this, S, i);
+      if (H->valid())
+	obstructions.push_back(H);
+      else
+	delete H;
+    }
   }
 
-#if DEBUG
-  printf("Incident to disks:");
-#endif
-
-  for (int i = 0; i<mDiskNum; i++) {
-    if (cycledata.mCycleDisks[i])
-      cycledata.mIncNumber++;
-
-#if DEBUG
-    if (cycledata.mCycleDisks[i])
-      printf(" %d", i);
-#endif
+  if (mDiskNum) {
+    forall_disks(it, *this) {
+      Disk * D = *it;
+      DiskEars * H = new DiskEars(this, D, S, isK33);
+      if (H->valid())
+	obstructions.push_back(H);
+      else
+	delete H;
+    }
   }
-
-#if DEBUG
-  printf("\n");
-#endif
-}
-
-static Cycle cycles[MAXC];
-static int att[MAXC];
-
-int special_cycle_cmp(const void * pa, const void * pb)
-{
-  int a = *(int *)pa;
-  int b = *(int *)pb;
-  int d = att[a] - att[b];
-
-  if (d)
-    return d;
-
-  return cycles[a].size() - cycles[b].size();
 }
 
 int Slice::count_inc(AdjEntryArray<Disk*> & inc, List<edge> & sg, node & center) //!!! center added
@@ -1059,128 +1195,146 @@ int Slice::disk_neighbors(List<node> a, List<node> b) { //!!!
   return 0;
 }
 
-int Slice::construct_cycles(KuratowskiSubdivision & S, int isK33, Cycle * rcycles, int &cnum, CycleData & cycledata)
-{
-#if DEBUG
-  printf("In Slice::construct_cycles\n");
-#endif
-  int minval = 1 << (numberOfNodes()-3); //G.numberOfEdges() + 1;
-  int minatt = numberOfNodes();
+// int Slice::construct_cycles(KuratowskiSubdivision & S, int isK33, Cycle * rcycles, int &cnum, CycleData & cycledata)
+// {
+// #if DEBUG
+//   printf("In Slice::construct_cycles\n");
+// #endif
+//   int minval = 1 << (numberOfNodes()-3); //G.numberOfEdges() + 1;
+//   int minatt = numberOfNodes();
 
-  int order[MAXC];
-  if (isK33) {
-    cnum = 2;
-    int num = 3;
+//   int order[MAXC];
+//   if (isK33) {
+//     cnum = 2;
+//     int num = 3;
 
-    for (int i = 0; i<6; i++) {
+//     for (int i = 0; i<6; i++) {
       
-#if DEBUG
-      printf("At %dth node of index %d in %d disks\n", i, cycledata.mNodes[i]->index(), mDiskNodes[cycledata.mNodes[i]].size());
-#endif
+// #if DEBUG
+//       printf("At %dth node of index %d in %d disks\n", i, cycledata.mNodes[i]->index(), mDiskNodes[cycledata.mNodes[i]].size());
+// #endif
 
-      int disk_node = 0;
-      if (mDiskNodes[cycledata.mNodes[i]].size()) {
-	if (mDiskNodes[cycledata.mNodes[i]].front()->mCenter == cycledata.mNodes[i]) {
-#if DEBUG
-	  printf("The node is the center of disk %d\n", mDiskNodes[cycledata.mNodes[i]].front()->id());
-#endif
+//       int disk_node = 0;
+//       if (mDiskNodes[cycledata.mNodes[i]].size()) {
+// 	if (mDiskNodes[cycledata.mNodes[i]].front()->mCenter == cycledata.mNodes[i]) {
+// #if DEBUG
+// 	  printf("The node is the center of disk %d\n", mDiskNodes[cycledata.mNodes[i]].front()->id());
+// #endif
 	  
-	  disk_node = 1;
-	}
-      }
+// 	  disk_node = 1;
+// 	}
+//       }
       
 
-      for (int j=0; j<3; j++) { //needs debugging
-	CONSTRUCT_CYCLE(S, cycles[j], 4, k33_edges, k33_rev, (i+1)%3 + (i/3)*3, j, j + ((i/3 + 1)%2)*3, (i+2)%3, (i+2)%3 + (i/3)*3, (j+1)%3, (j+1)%3 + ((i/3+1)%2)*3, (i+1)%3);
-	//CONSTRUCT_CYCLE(S, cycles[j], 4, k33_edges, k33_rev, (i+1)%3 + (i/3)*3, j, (i+2)%3 + (i/3)*3, j, (i+2)%3 + (i/3)*3, (j+1)%3, (i+1)%3 + (i/3)*3, (j+1)%3);
+//       for (int j=0; j<3; j++) { //needs debugging
+// 	CONSTRUCT_CYCLE(S, cycles[j], 4, k33_edges, k33_rev, (i+1)%3 + (i/3)*3, j, j + ((i/3 + 1)%2)*3, (i+2)%3, (i+2)%3 + (i/3)*3, (j+1)%3, (j+1)%3 + ((i/3+1)%2)*3, (i+1)%3);
+// 	//CONSTRUCT_CYCLE(S, cycles[j], 4, k33_edges, k33_rev, (i+1)%3 + (i/3)*3, j, (i+2)%3 + (i/3)*3, j, (i+2)%3 + (i/3)*3, (j+1)%3, (i+1)%3 + (i/3)*3, (j+1)%3);
 	
-	order[j] = j;
-	node center;
-	att[j] = count_inc(mDiskInc, cycles[j], center); //!!! center not used
-      }
+// 	order[j] = j;
+// 	node center;
+// 	att[j] = count_inc(mDiskInc, cycles[j], center); //!!! center not used
+//       }
 
-      qsort(order, num, sizeof(int), special_cycle_cmp);
+//       qsort(order, num, sizeof(int), special_cycle_cmp);
 
-      int val = 0;
-      for (int j=0; j<cnum; j++)
-	val += 1 << (cycles[order[j]].size()-3);
+//       int val = 0;
+//       for (int j=0; j<cnum; j++)
+// 	val += 1 << (cycles[order[j]].size()-3);
 
-#if DEBUG
-      printf("Cycles of value %d found:\n", val);
-      for (int j=0; j<num; j++) {
-	printf("Cycle of length %d found: ", cycles[order[j]].size());
-	print_edge_list(cycles[order[j]]);
-      }
-#endif
+// #if DEBUG
+//       printf("Cycles of value %d found:\n", val);
+//       for (int j=0; j<num; j++) {
+// 	printf("Cycle of length %d found: ", cycles[order[j]].size());
+// 	print_edge_list(cycles[order[j]]);
+//       }
+// #endif
 
-      if (disk_node || att[order[1]] < minatt || (att[order[1]] == minatt && val < minval)) {
-	minval = val;
-	minatt = att[order[1]];
-	for (int j=0; j<cnum; j++)
-	  rcycles[j] = cycles[order[j]];
-      }
+//       if (disk_node || att[order[1]] < minatt || (att[order[1]] == minatt && val < minval)) {
+// 	minval = val;
+// 	minatt = att[order[1]];
+// 	for (int j=0; j<cnum; j++)
+// 	  rcycles[j] = cycles[order[j]];
+//       }
       
-      if (disk_node)
-	break;
-    }
-  } else {
-#if DEBUG
-  printf("It is K_5 subdivision, not tested!\n");
-#endif
-    cnum = 3;
-    int num = 4;
+//       if (disk_node)
+// 	break;
+//     }
+//   } else {
+// #if DEBUG
+//   printf("It is K_5 subdivision, not tested!\n");
+// #endif
+//     cnum = 3;
+//     int num = 4;
     
-    CONSTRUCT_CYCLE(S, cycles[0], 3, k5_edges, k5_rev, 0, 0, 1, 1, 2, 0);
-    CONSTRUCT_CYCLE(S, cycles[1], 3, k5_edges, k5_rev, 0, 0, 1, 2, 3, 0);
-    CONSTRUCT_CYCLE(S, cycles[2], 3, k5_edges, k5_rev, 0, 1, 2, 2, 3, 0);
-    CONSTRUCT_CYCLE(S, cycles[3], 3, k5_edges, k5_rev, 1, 1, 2, 2, 3, 1);
-//     CONSTRUCT(S, cycles[0], 3, 0, 1, 4);
-//     CONSTRUCT(S, cycles[1], 3, 0, 2, 5);
-//     CONSTRUCT(S, cycles[2], 3, 1, 2, 7);
-//     CONSTRUCT(S, cycles[3], 3, 4, 5, 7);
-#if DEBUG
-  printf("Cycles constructed:\n");
-  for(int i=0; i<num; i++)
-    print_edge_list(cycles[i]);
-#endif
+//     CONSTRUCT_CYCLE(S, cycles[0], 3, k5_edges, k5_rev, 0, 0, 1, 1, 2, 0);
+//     CONSTRUCT_CYCLE(S, cycles[1], 3, k5_edges, k5_rev, 0, 0, 1, 2, 3, 0);
+//     CONSTRUCT_CYCLE(S, cycles[2], 3, k5_edges, k5_rev, 0, 1, 2, 2, 3, 0);
+//     CONSTRUCT_CYCLE(S, cycles[3], 3, k5_edges, k5_rev, 1, 1, 2, 2, 3, 1);
+// //     CONSTRUCT(S, cycles[0], 3, 0, 1, 4);
+// //     CONSTRUCT(S, cycles[1], 3, 0, 2, 5);
+// //     CONSTRUCT(S, cycles[2], 3, 1, 2, 7);
+// //     CONSTRUCT(S, cycles[3], 3, 4, 5, 7);
+// #if DEBUG
+//   printf("Cycles constructed:\n");
+//   for(int i=0; i<num; i++)
+//     print_edge_list(cycles[i]);
+// #endif
 
 
-    qsort(cycles, num, sizeof(List<edge>), cycle_cmp);
+//     qsort(cycles, num, sizeof(List<edge>), cycle_cmp);
     
-    int val = 0;
-    for (int i=0; i<cnum; i++)
-      val += 1 << (cycles[i].size()-3);
+//     int val = 0;
+//     for (int i=0; i<cnum; i++)
+//       val += 1 << (cycles[i].size()-3);
     
-    if (val < minval) {
-      minval = val;
-      for (int i=0; i<cnum; i++)
-	rcycles[i] = cycles[i];
+//     if (val < minval) {
+//       minval = val;
+//       for (int i=0; i<cnum; i++)
+// 	rcycles[i] = cycles[i];
+//     }
+//   }
+
+//   return minval;
+// }
+
+// int Slice::choose_cycles(KuratowskiSubdivision & S, int isK33, Cycle * cycles, CycleData & cycledata)
+// {
+// #if DEBUG
+//   printf("Slice::In choose cycles:\n");
+// #endif
+
+//   int num = 0;
+
+// #if DEBUG
+//   int val = 
+// #endif
+//     construct_cycles(S, isK33, cycles, num, cycledata);
+
+// #if DEBUG
+//   printf("Kuratowski subgraph of value %d and cycles %d\n", val, num);
+//   for(int i=0; i<num; i++)
+//     print_edge_list(cycles[i]);
+// #endif
+
+//   return num;
+// }
+
+Obstruction * Slice::choose_obstruction(vector<Obstruction *> & obstructions)
+{
+  int value = 0;
+  Obstruction * best = NULL;
+
+  trace(it, obstructions) {
+    Obstruction * H = *it;
+    int v = H->value();
+
+    if (!value || v < value) {
+      value = v;
+      best = H;
     }
   }
 
-  return minval;
-}
-
-int Slice::choose_cycles(KuratowskiSubdivision & S, int isK33, Cycle * cycles, CycleData & cycledata)
-{
-#if DEBUG
-  printf("Slice::In choose cycles:\n");
-#endif
-
-  int num = 0;
-
-#if DEBUG
-  int val = 
-#endif
-    construct_cycles(S, isK33, cycles, num, cycledata);
-
-#if DEBUG
-  printf("Kuratowski subgraph of value %d and cycles %d\n", val, num);
-  for(int i=0; i<num; i++)
-    print_edge_list(cycles[i]);
-#endif
-
-  return num;
+  return best;
 }
 
 void Slice::clear_orientation(Disk * D)
@@ -1203,12 +1357,21 @@ int Slice::orient_disk(List<edge> & cycle, AdjEntryArray<Disk*> & color, Disk * 
   D->mOrient.clear();
 
   ListIterator<edge> sit;
-  if (start) {
-    int pos = cycle.search(start);
-    assert(pos >= 0);
-    sit = cycle.get(pos);
-  } else
-    sit = cycle.begin();
+  if (!start) {
+    forall_listiterators(edge, it, cycle) {
+      edge e = *it;
+      if (color[e->adjSource()] || color[e->adjTarget()]) {
+	start = e;
+	break;
+      }
+    }
+  }
+  if (!start)
+    start = cycle.front();
+
+  int pos = cycle.search(start);
+  assert(pos >= 0);
+  sit = cycle.get(pos);
 
   adjEntry a = (*sit)->adjSource();
   if (color[a])
@@ -1235,7 +1398,7 @@ int Slice::orient_disk(List<edge> & cycle, AdjEntryArray<Disk*> & color, Disk * 
 
 #if DEBUG
   forall_listiterators(adjEntry, it, D->mOrient)
-    printf("%d ", (*it)->theNode()->index());
+    printf("%d ", index((*it)->theNode()));
   printf("\n");
 #endif
 
@@ -1243,6 +1406,9 @@ int Slice::orient_disk(List<edge> & cycle, AdjEntryArray<Disk*> & color, Disk * 
     assert(!color[*it]);
     color[*it] = D;
   }
+
+  if (D->mOrient.front()->twinNode() == D->mOrient.back()->theNode())
+    D->mOrient.reverse();
 
   D->recompute();
 
@@ -1451,7 +1617,8 @@ void Slice::create_one_disk(Cycle & cycle)
   
   edge e = 0;
   forall_listiterators(edge, it, cycle) {
-    if (!disk_edge(*it)) {
+    //    if (!disk_edge(*it)) { //Does not work, the disk has been cut-off
+    if (mEdgeCopies[mEdgeOrig[*it]].size() == 1) { //Does not work, the disk has been cut-off
       e = *it;
 #if DEBUG
       printf("Edge %s chosen with signature -1\n", print_edge_str(e));
@@ -1474,11 +1641,11 @@ void Slice::create_one_disk(Cycle & cycle)
   node u = e->target();
   node v = e->source();
   node w;
-  if (cycle.back()->isIncident(u))
+  if (disk.back()->isIncident(u))
     SWAP(u, v, w);
 
-  list_remove(mEdgeCopies[mEdgeOrig[e]], e);
   assert(mEdgeOrig[e]);
+  list_remove(mEdgeCopies[mEdgeOrig[e]], e);
 
   edge f;
   f = newEdgeCopy(e, u, D->mNodePairs[v]);
@@ -1742,23 +1909,23 @@ int Slice::test_disks_orientation(int orient, Disk * A, Disk * B)
   return 0;
 }
 
-int Slice::is_orientable(Cycle * cycles, int & num)
+Obstruction * Slice::is_non_orientable()
 {
 #if DEBUG
-  printf("In Slice::is_orientable, mDiskNum %d, mSingle %d, mDouble %d, mOrientable %d\n", mDiskNum, mSingle, mDouble, mOrientable);
+  printf("In Slice::is_non_orientable, mDiskNum %d, mSingle %d, mDouble %d, mOrientable %d\n", mDiskNum, mSingle, mDouble, mOrientable);
 #endif
   if (!mDiskNum)
-    return 1;
+    return NULL;
   
   if (mSingle || !mOrientable)
-    return 1;
+    return NULL;
 
   if (mOrientable > 0) {
     for (int i = 0; i<mDiskNum; i++) {
       if (mDisks[i]->mId < mDisks[i]->pair()->mId) {
 	int res = test_disks_orientation(mOrientable, mDisks[i], mDisks[i]->pair());
 	if (!res)
-	  return 0;
+	  return new Unsolvable();
       }
     }
   }
@@ -1768,13 +1935,13 @@ int Slice::is_orientable(Cycle * cycles, int & num)
       if (mDisks[i]->mId < mDisks[i]->pair()->mId) {
 	int res = test_disks_orientation(mOrientable, mDisks[i], mDisks[i]->pair());
 	if (res)
-	  return 1;
+	  return NULL;
       }
     }
-    return 0;
+    return new Unsolvable();
   }
   
-  return 1;
+  return NULL;
 }
 
 int Slice::incident(edge e, Disk * D)
@@ -1790,7 +1957,7 @@ int Slice::incident(node v, Disk * D)
 void Slice::join_disks(Disk * D1, Disk * D2, node source, node target) //!!!source added
 {
 #if DEBUG
-  printf("Joining disks %d, %d\n", D1->id(), D2->id());
+  printf("Joining disks %d, %d at nodes %d, %d\n", D1->id(), D2->id(), index(source), index(target));
 #endif
 
   //we assume that two disks share at most one segment
@@ -1806,6 +1973,9 @@ void Slice::join_disks(Disk * D1, Disk * D2, node source, node target) //!!!sour
       if (incident(v, D2) && (D2->has_pair() || D2->mSide[target] == D2->mSide[v])) {
 	merge[u] = v;
 	merge[v] = u;
+#if DEBUG
+	printf("Vertices to merge: %d, %d\n", index(u), index(v));
+#endif
       }
     }
   }
@@ -1818,7 +1988,7 @@ void Slice::join_disks(Disk * D1, Disk * D2, node source, node target) //!!!sour
     node v = a->theNode();
     node w = a->twinNode();
 #if DEBUG
-    printf("At %d, %d, %d, %d\n", v->index(), w->index(), index(merge[v]), index(merge[w]));
+    printf("At %d, %d, %d, %d\n", index(v), index(w), index(merge[v]), index(merge[w]));
 #endif
     if (merge[v] && merge[w]) {
       edge e = searchEdge(merge[v], merge[w]);  
@@ -2091,20 +2261,15 @@ Slice * Slice::extend_embedding()
   return emb;
 }
 
-int Slice::noncontractible_cycles(Cycle * cycles, int & num)
+Obstruction * Slice::noncontractible_cycles()
 {
 #if DEBUG
   printf("In Slice::noncontractible_cycle, genus %d\n", mGenus);
 #endif
 
-  num = 0;
-
-  //  num = test_ears(cycles);
-
-  int planar = 1;
   if (mGenus) {
     KuratowskiWrapper K;
-    planar = best_k_graph(*this, K);
+    int planar = best_k_graph(*this, K);
 
     if (!planar) {
 	
@@ -2113,56 +2278,53 @@ int Slice::noncontractible_cycles(Cycle * cycles, int & num)
       print_edge_list(K.edgeList);
 #endif
 
-      CycleData cycledata;
-      cycledata.mCycleDisks.init(2*MAXGENUS+1);
       KuratowskiSubdivision S;
       int isK33 = K.isK33();
       transform(*this, K, S);
 
-      //if (mDiskNum) {
-      kuratowski_analysis(S, isK33, cycledata);
+      vector<Obstruction *> obstructions;
+      kuratowski_analysis(S, isK33, obstructions);
 
+      assert(obstructions.size()); //assert that we have constructed some obstruction
+
+      Obstruction * best;
+      best = choose_obstruction(obstructions);
+      if (best) {
+	trace(it, obstructions)
+	  if (*it != best)
+	    delete *it;
+	return best;
+      } else {
 #if DEBUG
-      printf("Kuratowski graph incident to %d disks\n", cycledata.mIncNumber);
+	printf("No valid obstruction constructed\n");
 #endif
-      //}
-
-      num = choose_cycles(S, isK33, cycles, cycledata);
-      return !num;
-
-//       num = best_cycles(*this, K, cycles);
-//       return !num;
+	trace(it, obstructions)
+	  delete *it;
+	return new Unsolvable();
+      }
     }
-  } else {
-    //    if (!mDiskNum) 
-    //      return test_planarity(*this);
-    
-#if DEBUG
-    printf("Embedding needed\n");
-    print_graph(*this);
-    print_graph_graph6(*this);
-#endif
-    
-    planar = test_planarity_with_embedding(*this);
   }
 
-  if (!planar) 
-    return 0;
+#if DEBUG
+  printf("Getting embedding into the plane\n");
+  print_graph(*this);
+  print_graph_graph6(*this);
+#endif
+    
+  int planar = test_planarity_with_embedding(*this);
+  if (!planar)
+    return new Unsolvable();
+
+  Obstruction * B = is_non_orientable();
 
 #if DEBUG
-  printf("Slice is planar\n");
+  printf("The embedding has %s orientation\n", strcorrect[!B].c_str());
 #endif
 
-  int orient = is_orientable(cycles, num);
-
-#if DEBUG
-  printf("The embedding has %s orientation\n", strcorrect[orient].c_str());
-#endif
-
-  return orient;
+  return B;
 }
 
-Slice * Slice::cut_cycles(Cycle * cycles, int num)
+Slice * Slice::cut_cycles(Obstruction * B)
 {
 #if DEBUG
   printf("In cut_cycles, genus=%d\n", mGenus);
@@ -2171,7 +2333,13 @@ Slice * Slice::cut_cycles(Cycle * cycles, int num)
   if (!mGenus)
     return 0;
   
-  assert(num);
+  assert(B);
+#if DEBUG
+  printf("Obstruction with %d cycles\n", B->numCycles());
+  for (int j=0; j<B->numCycles(); j++)
+    print_edge_list(B->cycle(j));
+#endif
+
   
   NodeArray<node> vCopy;
   EdgeArray<edge> eCopy;
@@ -2179,13 +2347,13 @@ Slice * Slice::cut_cycles(Cycle * cycles, int num)
   Slice * emb = 0;
   Cycle act;
 
-  for (int i = 0; i<num; i++) {
+  for (int i = 0; (uint)i<B->numCycles(); i++) {
     if (mGenus && mOrientable <= 0) {
 #if DEBUG
       printf("Testing one-sided curves:\n");
 #endif
       Slice * S = new Slice(*this, vCopy, eCopy);
-      S->copy_cycle(vCopy, eCopy, cycles[i], act);
+      S->copy_cycle(vCopy, eCopy, B->cycle(i), act);
       S->cut_along_onesided(act);
       S->compute_unselected();
       S->compute_disk_inc();
@@ -2200,11 +2368,11 @@ Slice * Slice::cut_cycles(Cycle * cycles, int num)
     
     if (mGenus > 1) {
 #if DEBUG
-      printf("Testing two-sided curves (%d out of %d):\n", i+1, num);
+      printf("Testing two-sided curves (%d out of %d):\n", i+1, B->numCycles());
 #endif
       
       Slice * S = new Slice(*this, vCopy, eCopy);
-      S->copy_cycle(vCopy, eCopy, cycles[i], act);
+      S->copy_cycle(vCopy, eCopy, B->cycle(i), act);
       S->cut_along_twosided(act);
       S->compute_unselected();
       S->compute_disk_inc();
@@ -2220,6 +2388,7 @@ Slice * Slice::cut_cycles(Cycle * cycles, int num)
   
   
  END:
+  delete B;
   return emb;
 }
 
@@ -2235,28 +2404,26 @@ Slice * Slice::embed()
   //hide unselected edges
   //  hide_unselected();
 
-  Cycle cycles[MAXC];
-  int planar = 0;
-  int num = 0;
+  Obstruction * B;
 
   add_centers();
 
-  planar = noncontractible_cycles(cycles, num);
+  B = noncontractible_cycles();
 
   remove_centers();
 
 #if DEBUG
-  printf("Slice is %s with %d unselected edges\n", str[planar].c_str(), mUnselected);
+  printf("Slice is %s with %d unselected edges\n", str[!B].c_str(), mUnselected);
 #endif
 
   Slice * emb = 0;
-  if (planar) {
+  if (!B) {
     if (!mUnselected)
       emb = this;
     else
       emb = extend_embedding();
   } else {
-    emb = cut_cycles(cycles, num);
+    emb = cut_cycles(B);
   }
 
 #if DEBUG
@@ -2541,7 +2708,7 @@ void Slice::set_embedding(EdgeArray<int> & signature)
 
 	  edge h;
 	  forall_adj_edges(h, u) {
-	    if (incident(h, D))
+	    if (incident(h, D)) //What if two disks are incident and $h$ is a center edge of the neighboring disk
 	      continue;
 	    
 	    edge f = mEdgeOrig[h];

@@ -10,10 +10,13 @@
 #include <ogdf/internal/planarity/ConnectedSubgraph.h>
 #include <vector>
 #include <assert.h>
+#include <algorithm>
 
 
 #define forall_disks(D, L)  for (Disk ** D = (L).mDisks.begin(); D!=(L).mDisks.end(); ++D)
 #define forall_emb_faces(F, E)  for ((F) = &(E).faces().front(); (F); (F) = (F)->next())
+
+typedef pair<node, List<edge> > Path;
 
 class Slice;
 
@@ -57,14 +60,41 @@ class Disk
   node center();
 };
 
+class Obstruction {
+ protected:
+  vector<Cycle> mCycles;
+  bool mValid;
+ public:
+  uint numCycles();
+  Cycle & operator[](int);
+  Cycle & cycle(int a) { return (*this)[a]; };
+  Obstruction();
+  virtual int value();
+  bool valid() { return mValid; };
+};
 
-typedef struct {
-  int mIncNumber;
-  int mSymmetry;
-  Array<int> mCycleDisks;
-  node mNodes[KURSIZE];
-  int mCode;
-} CycleData;
+class DisjointK23: public Obstruction {
+ private:
+  void init(Slice * slice, KuratowskiSubdivision & S, int nind);
+ public:
+  DisjointK23(Slice * slice, KuratowskiSubdivision & S, int nind);
+};
+
+class DisjointK4: public Obstruction {
+ private:
+  void init(Slice * slice, KuratowskiSubdivision & S, int nind);
+ public:
+  DisjointK4(Slice * slice, KuratowskiSubdivision & S, int nind);
+};
+
+class DiskEars: public Obstruction {
+ public:
+  DiskEars(Slice * slice, Disk * disk, KuratowskiSubdivision & S, bool isK33);
+  void init(Slice * slice, Disk * disk, KuratowskiSubdivision & S, bool isK33);
+};
+
+class Unsolvable: public Obstruction {
+};
 
 class Slice: public Graph
 {
@@ -84,7 +114,6 @@ class Slice: public Graph
   int mOrientable;            //orientability of the surface (+1 orientable, -1 non-orientable, 0 both)
   int mCentersVisible;
   //  Cycle mCycle;
-  //  CycleData mCycleData;
   AdjEntryArray<Disk*> mDiskInc; //Disk on the right side of an adjacency
   NodeArray< List<Disk*> > mDiskNodes; //Disks incident to a vertex
   Array<Disk*> mDisks;        //array of disks
@@ -106,12 +135,7 @@ class Slice: public Graph
   node identify_nodes_reversible(node u, node v, List<adjEntry> & inc);
   node identify_nodes(node u, node v);
 
-  int disk_edge(edge e);
-  int disk_group(edge e);
-  int incident(edge e, Disk * D);
-  int incident(node v, Disk * D);
   void compute_disk_inc();
-  Disk * disk(edge e);
 
   int add_disk(Disk * D);
   node add_center(Disk * D);
@@ -137,20 +161,21 @@ class Slice: public Graph
   void cut_off_disk(Disk * D, EdgeArray<int> & disk, Disk * newD);
   void join_disks(Disk * D1, Disk * D2, node source, node target);
 
-  int disjoint_ears(Disk * D, Cycle * cycles);
+  //  int disjoint_ears(Disk * D, Cycle * cycles);
   int test_ears(Cycle * cycles);
   int is_planar_embedding(Cycle * cycles);
-  void kuratowski_analysis(KuratowskiSubdivision & S, int isK33, CycleData & cycledata);
-  int construct_cycles(KuratowskiSubdivision & S, int isK33, Cycle * rcycles, int &cnum, CycleData & cycledata);
-  int choose_cycles(KuratowskiSubdivision & S, int isK33, Cycle * cycles, CycleData & cycledata);
+  void kuratowski_analysis(KuratowskiSubdivision & S, int isK33, vector<Obstruction *> & obstructions);
+  //int construct_cycles(KuratowskiSubdivision & S, int isK33, Cycle * rcycles, int &cnum, CycleData & cycledata);
+  //int choose_cycles(KuratowskiSubdivision & S, int isK33, Cycle * cycles, CycleData & cycledata);
+  Obstruction * choose_obstruction(vector<Obstruction *> & obstructions);
   
   int disk_orientation(Disk * D, int withcenters = 1);
   int test_disks_orientation(int orient, Disk * A, Disk * B);
-  int is_orientable(Cycle * cycles, int & num);
+  Obstruction * is_non_orientable();
   void flip_disk(Disk * D);
   void regroup(Disk * D);
 
-  int noncontractible_cycles(Cycle * cycles, int & num);
+  Obstruction * noncontractible_cycles();
 
   void embed_edge(edge e);
   void unembed_edge(edge e);
@@ -162,7 +187,7 @@ class Slice: public Graph
   Slice * symmetric_dichotomy(Disk * D, edge e, edge f);
   Slice * test_dichotomy();
   Slice * test_extend_smart();
-  Slice * cut_cycles(Cycle * cycles, int num);
+  Slice * cut_cycles(Obstruction * B);
   Slice * test_choice(node u, node v);
   Slice * test_choice_inside(node & u, node v);
   Slice * test_choices(node w);
@@ -202,6 +227,14 @@ class Slice: public Graph
   Graph * original() { return mOrig; }
   void set_embedding(EdgeArray<int> & signature);
   void copy_cycle(NodeArray<node> & vCopy, EdgeArray<edge> & eCopy, Cycle & C, Cycle & Copy);
+
+  Disk * disk(edge e);
+  int disk_edge(edge e);
+  int disk_group(edge e);
+  int incident(edge e, Disk * D);
+  int incident(node v, Disk * D);
+
+  int disk_num() { return mDiskNum; };
 };
 
 class Embedder;
@@ -280,9 +313,6 @@ class Embedder: public Graph
   int unique_emb(edge e, edge f);
 };
 
-static void print_emb(Embedder & E, int genus)
-{
-  print_emb(E, E.signature(), genus);
-}
+void print_emb(Embedder & E, int genus);
 
 #endif
