@@ -16,8 +16,6 @@
 #define forall_disks(D, L)  for (Disk ** D = (L).mDisks.begin(); D!=(L).mDisks.end(); ++D)
 #define forall_emb_faces(F, E)  for ((F) = &(E).faces().front(); (F); (F) = (F)->next())
 
-typedef pair<node, List<edge> > Path;
-
 class Slice;
 
 class Disk

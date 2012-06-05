@@ -891,6 +891,41 @@ int DFS(Graph & G, NodeArray<int> & visited, EdgeArray<int> & span, node v)
   return 0;
 }
 
+void all_paths_DFS(Graph & G, EdgeArray<int> & subg, int subgi, node act, NodeArray<int> & target, List<Path> & res, NodeArray<int> & visited, List<edge> & path)
+{
+  edge e;
+  forall_adj_edges(e, act) {
+    if (subg[e] != subgi)
+      continue;
+
+    node u = e->opposite(act);
+
+    if (visited[u]) 
+      continue;
+
+    visited[u] = 1;
+    path.pushBack(e);
+  
+    if (target[u]) {
+      res.pushBack(Path(u, path));
+    } else
+      all_paths_DFS(G, subg, subgi, u, target, res, visited, path);
+
+    path.popBack();
+    visited[u] = 0;
+  }
+  
+}
+
+void all_paths(Graph & G, EdgeArray<int> & subg, int subgi, node source, NodeArray<int> & target, List<Path> & res)
+{
+  NodeArray<int> visited(G, 0);
+  NodeArray<adjEntry> paths(G, 0);
+  List<edge> path;
+
+  all_paths_DFS(G, subg, subgi, source, target, res, visited, path);
+}
+
 int findpairs(Graph & G, vector<adjEntry> &halfedges, NodeArray<int> & cnode, vector< Tuple2<int,int> > & pairs)
 {
 #if DEBUG

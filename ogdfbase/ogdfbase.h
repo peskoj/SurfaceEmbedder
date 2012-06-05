@@ -256,6 +256,7 @@ template <typename LIST, typename IT >
 //------------------------ typedefs -----------------------------------
 
 typedef List<edge> Cycle;
+typedef pair<node, List<edge> > Path;
 
 class GraphCutter: public GraphCopySimple
 {
@@ -384,6 +385,7 @@ int two_con_comp(Graph & G, NodeArray<int> & nodes, int subg, NodeArray<int> & c
 node BFS_subgraph(Graph & G, EdgeArray<int> & div, int subg, node source, NodeArray<int> & visited, int color, NodeArray<int> & target, NodeArray<adjEntry> & path, int shortest_only);
 void construct_path(node source, node sink, NodeArray<adjEntry> & dir, List<edge> & path);
 node BFS(Graph & G, node source, NodeArray<int> & visited, NodeArray<int> & target, NodeArray<adjEntry> & path);
+void all_paths(Graph & G, EdgeArray<int> & subg, int subgi, node source, NodeArray<int> & target, List<Path> & res);
 
 //----------- Kuratowski graphs ---------------------------
 void kuratowski_nodes(KuratowskiSubdivision & S, vector<node> & nodes, int isK33);

@@ -35,7 +35,7 @@ Disk::Disk(Slice & S, int symmetric = 1)
   mCenter = 0;
   mCenterVisible = 0;
   mSymmetry = symmetric;
-  //  mOutEdges = 0;
+  mSign = 0;
 
   mNodePairs.init(S, 0);
   mSide.init(S, 0);
@@ -54,6 +54,7 @@ Disk::Disk(Slice & S, const Disk & D, NodeArray<node> & vCopy, EdgeArray<edge> &
   mGroup = D.mGroup;
   mSymmetry = D.mSymmetry;
   mPair = NULL;
+  mSign = D.mSign;
 
   mNodePairs.init(S, 0);
   mSide.init(S, 0);
@@ -399,6 +400,9 @@ void DiskEars::init(Slice * slice, Disk * disk, KuratowskiSubdivision & S, bool 
   printf("\n");
 #endif
 
+  if (disk_nodes.size() < 4)
+    return;
+
   NodeArray<int> terms(*slice, 0);
   trace(it, disk_nodes)
     terms[*it] = 1;
@@ -407,22 +411,8 @@ void DiskEars::init(Slice * slice, Disk * disk, KuratowskiSubdivision & S, bool 
 
   trace(it, disk_nodes) {
     node u = *it;
-    NodeArray<int> visited(*slice, 0);
-    NodeArray<adjEntry> paths(*slice, 0);
-    BFS_subgraph(*slice, edges, 4, u, visited, 1, terms, paths, 0);
-
-    trace(vit, disk_nodes) {
-      node v = *vit;
-      if (u == v)
-	continue;
-      
-      List<edge> path;
-      
-      if (visited[v]) {
-	construct_path(v, u, paths, path);
-	ears[v].pushBack(Path(u, path));
-      }
-    } 
+    all_paths(*slice, edges, 4, u, terms, ears[u]);
+    //BFS_subgraph(*slice, edges, 4, u, visited, 1, terms, paths, 0);
   }
   
 #if DEBUG
@@ -505,6 +495,10 @@ void DiskEars::init(Slice * slice, Disk * disk, KuratowskiSubdivision & S, bool 
       }
     }
   }
+
+#if DEBUG
+  printf("No disjoint ears found!\n");
+#endif
 }
 
 
@@ -2621,9 +2615,11 @@ void Slice::correct_disk_embedding(Disk * D)
     
     if (mOrientable && dsign != mOrientable) {
       flip_disk(D);
-      D->mSign = mOrientable;
-      D->pair()->mSign = mOrientable;
+      dsign = -dsign;
     }
+
+    D->mSign = dsign;
+    D->pair()->mSign = dsign;
   }
   if (!D->has_pair()) {
     D->mClockwise = disk_orientation(D);
