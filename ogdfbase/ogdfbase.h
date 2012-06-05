@@ -213,6 +213,14 @@ int list_remove(List<E> & L, E x)
 }
 
 template <typename E>
+void list_append(List<E> & to, List<E> & from)
+{
+  ListIterator<E> it = from.begin();
+  forall_listiterators(E, it, from)
+    to.pushBack(*it);
+}
+
+template <typename E>
 void set_array(E * a, int count, E x)
 {
   for (int i=0; i<count; i++)

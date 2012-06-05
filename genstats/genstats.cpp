@@ -39,7 +39,7 @@ int test_embeddable(Graph & G)
 int min_genus(Graph & G)
 {
   Embedder E(G);
-  return E.min_genus(orientable, genus);
+  return E.min_genus(genus, orientable);
 }    
 
 void init_stats() {
@@ -191,7 +191,7 @@ int main(int argc, char ** argv)
     clear_stats();
 
     Embedder E(G);
-    int g = E.min_genus(orientable, genus);
+    int g = E.min_genus(genus, orientable);
     
 #if VERBOSE
     printf("The graph has genus %d.\n", g);
@@ -205,7 +205,7 @@ int main(int argc, char ** argv)
     node y = nodes[terminals.second];
 
     edge xy = E.newEdge(x, y);
-    int gp = E.min_genus(orientable, genus);
+    int gp = E.min_genus(genus, orientable);
     E.delEdge(xy);
 
 #if VERBOSE

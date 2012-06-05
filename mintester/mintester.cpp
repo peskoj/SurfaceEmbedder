@@ -29,20 +29,20 @@ int fixed_edge(edge e)
 int test_embeddable(Graph & G)
 {
   Embedder E(G);
-  int res = E.embed(genus, orientable);
+  int mg = E.min_genus(genus+1, orientable);
 #if VERBOSE
-  if (res) {
+  if (mg <= genus) {
     E.set_embedding();
-    print_emb(E, genus);
+    print_emb(E, mg);
     int g = E.compute_genus();
-    printf("The graph is embeddable into the surface of genus %d orientable %d (required %d,%d)\n", g, E.orientable_emb(), genus, orientable);
+    printf("The graph is embeddable into the surface of genus %d orientable %d, claimed genus %d, required %d,%d)\n", g, E.orientable_emb(), mg, genus, orientable);
     if (g >= genus)
       assert(g == genus);
       if (orientable)
 	assert(E.orientable_emb() == orientable);
     }
 #endif
-  return res;
+  return mg <= genus;
 }
     
 

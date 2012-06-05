@@ -29,6 +29,7 @@ class Disk
   node mCenter;
   int mCenterVisible;
   int mClockwise;
+  int mSign;
   List<edge> mCenterEdges;
   List<adjEntry> mOrient; //disk edges with an arbitrary orientation
   NodeArray<node> mNodePairs; //pairs of nodes of disks
@@ -129,6 +130,7 @@ class Slice: public Graph
   node newNodeCopy(node u);
   node newNodeCopy(node u, int newid);
   edge newEdgeCopy(edge e, node u, node v);
+  void delEdgeCopy(edge e);
   void moveAdjEntry(adjEntry a, node u);
   void moveAdjacencies(node v, List<adjEntry> & inc);
   void copy_inc(node u, List<adjEntry> & inc);
@@ -225,10 +227,15 @@ class Slice: public Graph
   ~Slice();
   Slice * embed_in_surface(int genus, int orientable);
   Graph * original() { return mOrig; }
+
+  void pair_disks(Disk * D, AdjEntryArray<adjEntry> & lpair, AdjEntryArray<adjEntry> & rpair, AdjEntryArray<int> & lsign, AdjEntryArray<int> & rsign);
+  void set_signatures(Disk * D, EdgeArray<int> & signature, NodeArray<int> & vsign);
+  void correct_disk_embedding(Disk * D);
   void set_embedding(EdgeArray<int> & signature);
   void copy_cycle(NodeArray<node> & vCopy, EdgeArray<edge> & eCopy, Cycle & C, Cycle & Copy);
 
   Disk * disk(edge e);
+  int between_disks(edge e);
   int disk_edge(edge e);
   int disk_group(edge e);
   int incident(edge e, Disk * D);
@@ -298,7 +305,7 @@ class Embedder: public Graph
   inline EdgeArray<int> & signature() { return mSignature; }
 
   int genus();
-  int min_genus(int orientable, int maximum = 3);
+  int min_genus(int maximum, int orientable);
   int compute_genus();
   int numberOfFaces();
   int compute_faces();
