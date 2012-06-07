@@ -45,7 +45,7 @@ class Disk
   Disk * pair();
   int check_symmetry(node target);
   void recompute();
-  void exchange_node(node oldNode, node newNode);
+  bool consistencyCheck();
 
   node next(node u);
   adjEntry arc(node u);
@@ -55,6 +55,7 @@ class Disk
   int pairing_sign();
   int adjacent_nodes(node u, node v);
   void boundary(List<edge> & boundary, node u, node v);
+  void shorter_boundary(List<edge> & boundary, node start, node end);
   int alternating(List<node> & a, node * b);
   node center();
 };
@@ -92,6 +93,13 @@ class DiskEars: public Obstruction {
   void init(Slice * slice, Disk * disk, KuratowskiSubdivision & S, bool isK33);
 };
 
+class DiskTripod: public Obstruction {
+ public:
+  DiskTripod(Slice * slice, Disk * disk, KuratowskiSubdivision & S, bool isK33);
+  void init(Slice * slice, Disk * disk, KuratowskiSubdivision & S, bool isK33);
+};
+
+
 class Unsolvable: public Obstruction {
 };
 
@@ -127,10 +135,13 @@ class Slice: public Graph
   adjEntry find_adj(node u, node v);
   node newNodeCopy(node u);
   node newNodeCopy(node u, int newid);
+  void delNodeCopy(node u);
   edge newEdgeCopy(edge e, node u, node v);
   void delEdgeCopy(edge e);
   void moveAdjEntry(adjEntry a, node u);
   void moveAdjacencies(node v, List<adjEntry> & inc);
+  void moveAdjacencies(node u, node v);
+  void moveAdjacencies(node u, node v, List<adjEntry> & save);
   void copy_inc(node u, List<adjEntry> & inc);
   node identify_nodes_reversible(node u, node v, List<adjEntry> & inc);
   node identify_nodes(node u, node v);
@@ -141,6 +152,7 @@ class Slice: public Graph
   node add_center(Disk * D);
   void add_centers();
   void remove_center(Disk * D);
+  void delete_center(Disk * D);
   void remove_centers();
   Disk * is_center(node v);
   void push_disk_boundary(Disk * D, Cycle & C);
@@ -204,8 +216,10 @@ class Slice: public Graph
 
   void read_slice(Graph & G);
   void print_slice();
+  void print_slice_fast();
   void read_disk(Disk * D, Array<node> & nodes);
   void print_disk(Disk * D, NodeArray<int> & ind);
+  void print_disk_fast(Disk * D);
 
   void compute_copies();
   int compute_unselected();
@@ -240,6 +254,8 @@ class Slice: public Graph
   int incident(node v, Disk * D);
 
   int disk_num() { return mDiskNum; };
+  bool extendedConsistencyCheck();
+  bool valid_cycle(Cycle & C);
 };
 
 class Embedder;

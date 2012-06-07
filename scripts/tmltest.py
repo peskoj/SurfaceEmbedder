@@ -70,7 +70,7 @@ for o, a in optlist:
 
 if len(args) < 1:
     print("""
-Usage: tmltest.py <command>
+Usage: tmltest.py [-pPtT] <command>
 """)
     sys.exit(1)
 

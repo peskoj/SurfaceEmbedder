@@ -242,6 +242,17 @@ void print_graph_color(Graph & G, NodeArray<int> & ncolor, EdgeArray<int> & ecol
   printf("}\n");
 }
 
+void print_kuratowski(Graph & G, KuratowskiWrapper & K)
+{
+  NodeArray<int> ncolor(G, 0);
+  EdgeArray<int> ecolor(G, 0);
+
+  forall_slistiterators(edge, it, K.edgeList) 
+    ecolor[*it] = 1;
+
+  print_graph_color(G, ncolor, ecolor);
+}
+
 void print_local_emb(node v)
 {
   printf("%d:[", v->index());
@@ -822,6 +833,14 @@ void construct_path(node source, node sink, NodeArray<adjEntry> & dir, List<edge
   }
 }
 
+bool node_on_path(node u, List<edge> & path) 
+{
+  forall_listiterators(edge, it, path)
+    if ((*it)->isIncident(u))
+      return true;
+  return false;
+}
+
 node BFS_subgraph(Graph & G, EdgeArray<int> & div, int subg, node source, NodeArray<int> & visited, int color, NodeArray<int> & target, NodeArray<adjEntry> & path, int shortest_only = 1)
 {
 // #if DEBUG
@@ -923,6 +942,7 @@ void all_paths(Graph & G, EdgeArray<int> & subg, int subgi, node source, NodeArr
   NodeArray<adjEntry> paths(G, 0);
   List<edge> path;
 
+  visited[source] = 1;
   all_paths_DFS(G, subg, subgi, source, target, res, visited, path);
 }
 
@@ -1190,6 +1210,7 @@ void kuratowski_nodes(KuratowskiSubdivision & S, vector<node> & nodes, int isK33
 #endif
 
   if (isK33) {
+    nodes.resize(6);
     for (int i = 0; i<3; i++) {
       edge e = S[3*i].front();
       edge f = S[3*i+1].front();
@@ -1202,6 +1223,7 @@ void kuratowski_nodes(KuratowskiSubdivision & S, vector<node> & nodes, int isK33
     for (int i = 0; i<6; i++)
       assert(nodes[i]);
   } else {
+    nodes.resize(5);
 
     nodes[0] = S[0].front()->commonNode(S[1].front());
     nodes[1] = S[4].front()->commonNode(S[5].front());

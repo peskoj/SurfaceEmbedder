@@ -7,3 +7,5 @@
 *~
 [.]_*
 
+#ignore binaries
+run*

@@ -106,12 +106,12 @@ const int k33_rev[6][3] = {
   {0, 0, 0}, {0, 0, 0}, {0, 0, 0}, {1, 1, 1}, {1, 1, 1}, {1, 1, 1}
 };
 
-const int k5_edges[5][4] = {
-  {0, 1, 2, 3}, {0, 4, 5, 6}, {1, 4, 7, 8}, {2, 5, 7, 9}, {3, 6, 8, 9}
+const int k5_edges[5][5] = {
+  {-1, 0, 1, 2, 3}, {0, -1, 4, 5, 6}, {1, 4, -1, 7, 8}, {2, 5, 7, -1, 9}, {3, 6, 8, 9, -1}
 };
 
-const int k5_rev[5][4] = {
-  {0, 0, 0, 0}, {1, 0, 0, 0}, {1, 1, 0, 0}, {1, 1, 1, 0}, {1, 1, 1, 1}
+const int k5_rev[5][5] = {
+  {0, 0, 0, 0, 0}, {1, 0, 0, 0, 0}, {1, 1, 0, 0, 0}, {1, 1, 1, 0, 0}, {1, 1, 1, 1, 0}
 };
 
 using namespace ogdf;
@@ -217,6 +217,14 @@ void list_append(List<E> & to, List<E> & from)
 {
   ListIterator<E> it = from.begin();
   forall_listiterators(E, it, from)
+    to.pushBack(*it);
+}
+
+template <typename E>
+void list_append_rev(List<E> & to, List<E> & from)
+{
+  ListIterator<E> it = from.begin();
+  forall_rev_listiterators(E, it, from)
     to.pushBack(*it);
 }
 
@@ -383,6 +391,7 @@ int k_connected(Graph & G, node a, node b, int k);
 int color_comp(NodeArray<int> & nodes, EdgeArray<int> & edges, int subg, node v, int c);
 int two_con_comp(Graph & G, NodeArray<int> & nodes, int subg, NodeArray<int> & comps, node v);
 node BFS_subgraph(Graph & G, EdgeArray<int> & div, int subg, node source, NodeArray<int> & visited, int color, NodeArray<int> & target, NodeArray<adjEntry> & path, int shortest_only);
+bool node_on_path(node u, List<edge> & path);
 void construct_path(node source, node sink, NodeArray<adjEntry> & dir, List<edge> & path);
 node BFS(Graph & G, node source, NodeArray<int> & visited, NodeArray<int> & target, NodeArray<adjEntry> & path);
 void all_paths(Graph & G, EdgeArray<int> & subg, int subgi, node source, NodeArray<int> & target, List<Path> & res);
@@ -472,6 +481,44 @@ void traverse_face(Graph & G, E face, adjEntry a, AdjEntryArray<E> & visited, No
 
   adjEntry next = a->twin()->cyclicSucc();
   traverse_face(G, face, next, visited, faces);
+}
+
+template <typename L, typename IT>
+bool next3diff(L & list, IT & it1, IT & it2, IT & it3)
+{
+  ++it3;
+  while (it3 == list.end()) {
+    ++it2;
+    while (it2 == list.end()) {
+      ++it1;
+      if (it1 == list.end())
+	return false;
+      
+      it2 = it1;
+      ++it2;
+    }
+    it3 = it2;
+    ++it3;
+  }
+  return true;
+}
+
+template <typename L, typename IT>
+bool next3(L & list, IT & it1, IT & it2, IT & it3)
+{
+  ++it3;
+  while (it3 == list.end()) {
+    ++it2;
+    while (it2 == list.end()) {
+      ++it1;
+      if (it1 == list.end())
+	return false;
+      
+      it2 = list.begin();
+    }
+    it3 = list.begin();
+  }
+  return true;
 }
 
 #endif

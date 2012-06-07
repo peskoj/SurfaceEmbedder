@@ -150,16 +150,6 @@ void Disk::recompute()
   }
 }
  
-void Disk::exchange_node(node oldNode, node newNode)
-{
-  //moveAdjEntry(arc(oldNode), newNode);
-  //moveAdjEntry(arc(prev(oldNode))->twin(), newNode);
-  mNext[newNode] = mNext[oldNode];
-  mNext[oldNode] = NULL;
-
-  recompute();
-}
-
 node Disk::next(node u)
 {
   assert(arc(u));
@@ -213,6 +203,29 @@ void Disk::boundary(List<edge> & boundary, node start, node end)
   }
 }
 
+void Disk::shorter_boundary(List<edge> & res, node start, node end) 
+{
+#if DEBUG
+  printf("Computing the shorter boundary between %d and %d\n", index(start), index(end));
+#endif
+
+  List<edge> a, b;
+  boundary(a, start, end);
+  boundary(b, end, start);
+
+  if (b.size() < a.size()) {
+    b.reverse();
+    res.conc(b);
+  } else {
+    res.conc(a);
+  }
+
+#if DEBUG
+  printf("Result:");
+  print_edge_list(res);
+#endif
+}
+
 int Disk::alternating(List<node> & a, node * b) //!!!?
 {
   return 0;
@@ -238,6 +251,22 @@ int Disk::pairing_sign()
 node Disk::center()
 {
   return mCenter;
+}
+
+bool Disk::consistencyCheck()
+{
+#if DEBUG
+  printf("Consistency check of disk %d\n", id());
+#endif
+  node u = mOrient.front()->theNode();
+  forall_listiterators(adjEntry, it, mOrient) {
+    adjEntry a = *it;
+    if (mNext[u] != a)
+      return false;
+    u = next(u);
+  }
+  
+  return true;
 }
 
 //------------------------ Obstruction -------------------------------------------------------------------
@@ -276,7 +305,7 @@ DisjointK23::DisjointK23(Slice * slice, KuratowskiSubdivision & S, int nind): Ob
 void DisjointK23::init(Slice * slice, KuratowskiSubdivision & S, int nind)
 {
 #if DEBUG
-  printf("Initializing a DisjointK23 obstruction\n");
+  printf("Initializing a DisjointK23 obstruction (index %d)\n", nind);
 #endif
 
   mValid = false;
@@ -293,20 +322,10 @@ void DisjointK23::init(Slice * slice, KuratowskiSubdivision & S, int nind)
       printf("Checking cycle");
       print_edge_list(*cyc);
 #endif
-      trace(it, *cyc) {
-	edge e = *it;
-	int d = slice->disk_group(e);
-	if (d) {
-#if DEBUG
-	  printf("Erasing cycle that intersects disk group %d\n", d);
-#endif
-	  cyc = mCycles.erase(cyc);
-	  goto END;
-	}
-      }
-      ++cyc;
-    END:
-      continue;
+      if (slice->valid_cycle(*cyc))
+	++cyc;
+      else
+	mCycles.erase(cyc);
     }
   }
 
@@ -326,11 +345,44 @@ DisjointK4::DisjointK4(Slice * slice, KuratowskiSubdivision & S, int nind): Obst
 
 void DisjointK4::init(Slice * slice, KuratowskiSubdivision & S, int nind)
 {
+#if DEBUG
+  printf("Initializing a DisjointK4 obstruction (index %d)\n", nind);
+#endif
+
+  mValid = false;
+
   mCycles.resize(4);
-  CONSTRUCT_CYCLE(S, mCycles[0], 3, k5_edges, k5_rev, 0, 0, 1, 1, 2, 0);
-  CONSTRUCT_CYCLE(S, mCycles[1], 3, k5_edges, k5_rev, 0, 0, 1, 2, 3, 0);
-  CONSTRUCT_CYCLE(S, mCycles[2], 3, k5_edges, k5_rev, 0, 1, 2, 2, 3, 0);
-  CONSTRUCT_CYCLE(S, mCycles[3], 3, k5_edges, k5_rev, 1, 1, 2, 2, 3, 1);
+  for (int i=0; i<4; i++) {
+#if DEBUG
+    printf("Constructing cycle %d-%d-%d\n", (nind+i+1)%5, (nind+i+2)%5, (nind+i+3)%5);
+#endif
+    
+    CONSTRUCT_CYCLE(S, mCycles[i], 3, k5_edges, k5_rev, (nind+i+1)%5, (nind+i+2)%5, (nind+i+2)%5, (nind+i+3)%5, (nind+i+3)%5, (nind+i+1)%5);
+#if DEBUG
+    print_edge_list(mCycles[i]);
+#endif
+  }
+
+  if (slice->disk_num()) {
+    trace_while(cyc, mCycles) {
+#if DEBUG
+      printf("Checking cycle");
+      print_edge_list(*cyc);
+#endif
+      if (slice->valid_cycle(*cyc))
+	++cyc;
+      else
+	mCycles.erase(cyc);
+    }
+  }
+
+  if (mCycles.size() < 3)
+    return;
+
+  sort(mCycles.begin(), mCycles.end(), cycle_cmp_bool);
+
+  mCycles.resize(3);
+  mValid = true;
 }
 
 DiskEars::DiskEars(Slice * slice, Disk * disk, KuratowskiSubdivision & S, bool isK33): Obstruction()
@@ -501,6 +553,255 @@ void DiskEars::init(Slice * slice, Disk * disk, KuratowskiSubdivision & S, bool 
 #endif
 }
 
+DiskTripod::DiskTripod(Slice * slice, Disk * disk, KuratowskiSubdivision & S, bool isK33): Obstruction()
+{
+  init(slice, disk, S, isK33);
+}
+
+void DiskTripod::init(Slice * slice, Disk * disk, KuratowskiSubdivision & S, bool isK33)
+{ 
+#if DEBUG
+  printf("Initializing DiskTripod obstruction for disk %d\n", disk->id());
+#endif
+  mValid = false;
+
+  EdgeArray<int> edges(*slice, 0);
+  vector<node> disk_nodes;
+
+  int count = 0;
+  forall_listiterators(adjEntry, it, disk->mOrient) {
+    adjEntry a = *it;
+    edge e = a->theEdge();
+    edges[e] += 1;
+  }
+
+  forall_listiterators(edge, it, disk->mCenterEdges) {
+    edge e = *it;
+    edges[e] += 2;
+  }
+
+  trace(lit, S) {
+    forall_listiterators(edge, it, *lit) {
+      edge e = *it;
+      if (edges[e])
+	count++;
+      
+      edges[e] += 4;    
+    }
+  }
+  
+#if DEBUG
+  printf("There are %d common edges\n", count);
+#endif
+  if (!count)
+    return;
+
+  forall_listiterators(adjEntry, it, disk->mOrient) {
+    adjEntry a = *it;
+    node u = a->theNode();
+    bool disknode = slice->incident(u, disk);
+    bool inside = true; 
+
+    edge e;
+    forall_adj_edges(e, u)
+      if (edges[e] == 4) {
+	inside = false;
+	break;
+      }
+    
+    if (disknode && !inside)
+      disk_nodes.push_back(u);
+  }
+
+#if DEBUG
+  printf("There are %lu disk branch nodes\n", disk_nodes.size());
+  trace(it, disk_nodes)
+    printf("%d ", index(*it));
+  printf("\n");
+#endif
+
+  if (disk_nodes.size() < 3)
+    return;
+
+  vector<node> branch_nodes;
+  kuratowski_nodes(S, branch_nodes, isK33);
+  trace_while(bit, branch_nodes) {
+    node u = *bit;
+    if (slice->incident(u, disk))
+      goto DEL;
+
+    ++bit;
+    continue;
+  DEL:
+    bit = branch_nodes.erase(bit);
+  }
+
+  NodeArray<int> terms(*slice, 0);
+  trace(it, disk_nodes)
+    terms[*it] = 1;
+
+  NodeArray< List<Path> > paths(*slice);
+
+  trace(it, branch_nodes) {
+    node u = *it;
+
+    all_paths(*slice, edges, 4, u, terms, paths[u]);
+  }
+
+  trace_while(bit2, branch_nodes) {
+    node u = *bit2;
+    if (paths[u].size() < 3)
+      goto DEL2;
+
+    ++bit2;
+    continue;
+  DEL2:
+    bit2 = branch_nodes.erase(bit);
+  }
+  
+#if DEBUG
+  printf("Paths found:\n");
+  trace(uit, branch_nodes) {
+    node u = *uit;
+    printf("Paths from %d:\n", index(u));
+    forall_listiterators(Path, wit, paths[u]) {
+      printf("To %d:", index((*wit).first));
+      print_edge_list((*wit).second);
+    }
+  }
+#endif
+
+  trace(uit, branch_nodes) {
+    node u = *uit;
+
+    vector<node>::iterator vit = uit;
+    for (vit++; vit != branch_nodes.end(); ++vit) {
+      node v = *vit;
+      
+      List<Path>::iterator uit1, uit2, uit3;
+      uit1 = uit2 = uit3 = paths[u].begin();
+      ++uit2;
+      ++(++uit3);
+      
+      bool repeat = true;
+      
+      while (repeat) {
+	node u1 = (*uit1).first;
+	node u2 = (*uit2).first;
+	node u3 = (*uit3).first;
+
+	if (u1 == u2 || u1 == u3 || u2 == u3) {
+	  repeat = next3diff(paths[u], uit1, uit2, uit3);
+	  continue;
+	}
+
+	if (node_on_path(v, (*uit1).second) ||
+	    node_on_path(v, (*uit2).second) ||
+	    node_on_path(v, (*uit3).second)) {
+	  repeat = next3diff(paths[u], uit1, uit2, uit3);
+	  continue;	  
+	}
+
+	if (intersect((*uit1).second, (*uit2).second) || 
+	    intersect((*uit2).second, (*uit3).second) || 
+	    intersect((*uit3).second, (*uit1).second)) {
+	  repeat = next3diff(paths[u], uit1, uit2, uit3);
+	  continue;	  
+	}
+
+	List<Path>::iterator vit1, vit2, vit3;
+	vit1 = vit2 = vit3 = paths[v].begin();
+	++vit2;
+	++(++vit3);
+
+	bool repeat2 = true;
+	
+	while (repeat2) {
+	  node v1 = (*vit1).first;
+	  node v2 = (*vit2).first;
+	  node v3 = (*vit3).first;
+      
+	if (v1 != u1 || v2 != u2 || v3 != u3) {
+	  repeat2 = next3(paths[v], vit1, vit2, vit3);
+	  continue;
+	}
+	
+	if (node_on_path(u, (*vit1).second) ||
+	    node_on_path(u, (*vit2).second) ||
+	    node_on_path(u, (*vit3).second)) {
+	  repeat2 = next3(paths[v], vit1, vit2, vit3);
+	  continue;	  
+	}
+
+	if (intersect((*vit1).second, (*vit2).second) || 
+	    intersect((*vit2).second, (*vit3).second) || 
+	    intersect((*vit3).second, (*vit1).second)) {
+	  repeat2 = next3(paths[v], vit1, vit2, vit3);
+	  continue;	  
+	}
+	if (intersect((*uit1).second, (*vit2).second) || 
+	    intersect((*uit1).second, (*vit3).second) || 
+	    intersect((*uit2).second, (*vit1).second) || 
+	    intersect((*uit2).second, (*vit3).second) || 
+	    intersect((*uit3).second, (*vit1).second) || 
+	    intersect((*uit3).second, (*vit2).second)) {
+	  repeat2 = next3(paths[v], vit1, vit2, vit3);
+	  continue;	  
+	}
+
+#if DEBUG
+	printf("Tripod found on branch nodes %d and %d:\n", index(u), index(v));
+	print_edge_list((*uit1).second);
+	print_edge_list((*uit2).second);
+	print_edge_list((*uit3).second);
+	print_edge_list((*vit1).second);
+	print_edge_list((*vit2).second);
+	print_edge_list((*vit3).second);
+#endif
+	
+	if ((*vit1).second.size() + (*vit2).second.size() + (*vit3).second.size() <
+	    (*uit1).second.size() + (*uit2).second.size() + (*uit3).second.size()) {
+	  uit1 = vit1;
+	  uit2 = vit2;
+	  uit3 = vit3;
+	}
+
+	mCycles.resize(3);
+	disk->shorter_boundary(mCycles[0], u1, u2); 
+	list_append_rev(mCycles[0], (*uit2).second);
+	list_append(mCycles[0], (*uit1).second);
+
+	disk->shorter_boundary(mCycles[1], u2, u3);
+	list_append_rev(mCycles[1], (*uit3).second);
+	list_append(mCycles[1], (*uit2).second);
+
+	disk->shorter_boundary(mCycles[2], u3, u1);
+	list_append_rev(mCycles[2], (*uit1).second);
+	list_append(mCycles[2], (*uit3).second);
+
+#if DEBUG
+	  printf("Three cycles constructed:\n");
+	  for (int i=0; i<3; i++)
+	    print_edge_list(mCycles[i]);
+#endif
+
+	  sort(mCycles.begin(), mCycles.end(), cycle_cmp_bool);
+	  
+	  mCycles.resize(2);
+	  
+	  mValid = true;
+	  return;
+	  
+	}
+	repeat = next3diff(paths[u], uit1, uit2, uit3);
+      }
+    }
+  }
+
+#if DEBUG
+  printf("No tripod found!\n");
+#endif
+}
 
 
 //----------------------- Slice --------------------------------
@@ -722,6 +1023,41 @@ void Slice::read_slice(Graph & G)
   compute_copies();
 }
 
+void Slice::print_slice_fast()
+{
+  print_graph_fast(*this);
+
+  node u;
+  forall_nodes(u, *this) {
+    if (!mNodeOrig[u]) {
+#if DEBUG
+      printf("(%d) ", index(u));
+#endif
+      continue;
+    }
+      
+    printf("%d->%d ", index(u), index(mNodeOrig[u]));
+  }
+  printf("\n");
+
+  forall_nodes(u, *this) {
+    if (mPoss[u].size()) {
+      printf("%d:%d(", index(u), mPoss[u].size());
+      forall_listiterators(node, it, mPoss[u]) {
+	printf("%d ", index(*it));
+      }
+      printf(") ");
+    }
+  }
+  printf("\n");
+
+  printf("%d\n", mDiskNum);
+  for (int i = 0; i<mDiskNum; i++) 
+    print_disk_fast(mDisks[i]);
+
+  printf("\n");
+}
+
 void Slice::print_slice()
 {
   NodeArray<int> ind;
@@ -794,6 +1130,22 @@ void Slice::print_disk(Disk * D, NodeArray<int> & ind)
   forall_listiterators(adjEntry, it, D->mOrient) {
     adjEntry a = *it;
     printf(" %d-%d", ind[a->theNode()], ind[a->twinNode()]);
+  }
+  printf("\n");
+}
+
+void Slice::print_disk_fast(Disk * D)
+{
+  if (D->has_pair())
+    printf("Disk P %d", D->pair()->mId);
+  else
+    printf("Disk S");
+
+  printf(" %d", D->mOrient.size());
+  
+  forall_listiterators(adjEntry, it, D->mOrient) {
+    adjEntry a = *it;
+    printf(" %d-%d", index(a->theNode()), index(a->twinNode()));
   }
   printf("\n");
 }
@@ -949,7 +1301,49 @@ void Slice::pair_adj(adjEntry a, adjEntry b, int oA, int oB, AdjEntryArray<adjEn
 
 }
 
+bool Slice::extendedConsistencyCheck()
+{
+#if DEBUG
+  printf("Extended consistency check\n");
+#endif
+  bool result = true;
+  result = result && ((Graph*)this)->consistencyCheck();
 
+  forall_disks(it, *this) {
+    result = result && (*it)->consistencyCheck();
+  }
+
+  return result;
+}
+
+bool Slice::valid_cycle(Cycle & C)
+{
+  int disknodes = 0;
+  
+  trace(it, C) {
+    edge e = *it;
+    int d = disk_group(e);
+    if (d) {
+#if DEBUG
+      printf("Erasing cycle that intersects disk group %d\n", d);
+#endif
+      return false;
+    }
+
+    if (mDiskNodes[e->source()].size())
+      disknodes++;
+    
+    if (mDiskNodes[e->target()].size())
+      disknodes++;
+  }
+  if (disknodes > 2) {
+#if DEBUG
+    printf("Cycle contains %d disk nodes: erasing cycle\n", disknodes);
+#endif
+    return false;
+  }
+  return true;
+}
 
 //--------------------------- node & edge modifications ------------------------------------
 
@@ -997,6 +1391,11 @@ node Slice::newNodeCopy(node u, int newid)
   assert(mNodeOrig[v]);
   mNodeCopies[mNodeOrig[v]].pushBack(v);
   return v;
+}
+
+void Slice::delNodeCopy(node u) 
+{
+  delNode(u);
 }
 
 edge Slice::split(edge e)
@@ -1066,6 +1465,20 @@ void Slice::moveAdjacencies(node v, List<adjEntry> & inc)
   }
 }
 
+void Slice::moveAdjacencies(node u, node v, List<adjEntry> & save)
+{
+  adjEntry a;
+  forall_adj(a, u)
+    save.pushBack(a);
+  moveAdjacencies(v, save);
+}
+
+void Slice::moveAdjacencies(node u, node v)
+{
+  List<adjEntry> save;
+  moveAdjacencies(u, v, save);
+}
+
 void Slice::copy_inc(node u, List<adjEntry> & inc)
 {
   inc.clear();
@@ -1133,6 +1546,14 @@ void Slice::kuratowski_analysis(KuratowskiSubdivision & S, int isK33, vector<Obs
     forall_disks(it, *this) {
       Disk * D = *it;
       DiskEars * H = new DiskEars(this, D, S, isK33);
+      if (H->valid())
+	obstructions.push_back(H);
+      else
+	delete H;
+    }
+    forall_disks(it, *this) {
+      Disk * D = *it;
+      DiskTripod * H = new DiskTripod(this, D, S, isK33);
       if (H->valid())
 	obstructions.push_back(H);
       else
@@ -1684,7 +2105,7 @@ void Slice::create_one_disk(Cycle & cycle)
 #if DEBUG
   printf("Disk boundary created:\n");
   print_graph_fast(*this);
-  consistencyCheck();
+  assert(consistencyCheck());
 #endif
 
 
@@ -1804,6 +2225,21 @@ void Slice::remove_centers()
     remove_center(mDisks[i]);
 
   mCentersVisible = 0;
+}
+
+void Slice::delete_center(Disk * D)
+{
+  if (!D->mCenter)
+    return;
+
+#if DEBUG
+  printf("Deleting center %d of %d\n", index(D->mCenter), D->id());
+#endif
+
+  D->mCenterEdges.clear();
+  delNode(D->mCenter);
+  D->mCenter = NULL;
+  D->mCenterVisible = false;
 }
 
 Disk * Slice::is_center(node v)
@@ -2076,10 +2512,7 @@ node Slice::identify_nodes(node u, node v)
   printf("Identifying nodes %d -> %d\n", u->index(), v->index());
 #endif
 
-  adjEntry a;
-  forall_adj(a, u) {
-    moveAdjEntry(a, v);
-  }
+  moveAdjacencies(u, v);
 
   forall_listiterators(Disk*, it, mDiskNodes[u]) {
     Disk * D = *it;
@@ -2087,8 +2520,10 @@ node Slice::identify_nodes(node u, node v)
     node w = D->mNodePairs[u];
     D->mNodePairs[v] = D->mNodePairs[u];
     D->mNodePairs[w] = v;
+
+    delete_center(D);
   }
-  delNode(u); //! Should we?
+  delNodeCopy(u); //! Should we?
 
   return v;
 }
@@ -2096,33 +2531,48 @@ node Slice::identify_nodes(node u, node v)
 node Slice::identify_nodes_reversible(node u, node v, List<adjEntry> & inc)
 {
 #if DEBUG
-  printf("Identifying nodes %d, %d\n", u->index(), v->index());
+  printf("Identifying nodes %d -> %d reversibly\n", u->index(), v->index());
 #endif
 
-  adjEntry a;
-  forall_adj(a, u) {
-    moveAdjEntry(a, v);
-    inc.pushBack(a);
-  }
+  moveAdjacencies(u, v, inc);
 
   forall_listiterators(Disk*, it, mDiskNodes[u]) {
     Disk * D = *it;
     mDiskNodes[v].pushBack(D);
+    node w = D->mNodePairs[u];
     D->mNodePairs[v] = D->mNodePairs[u];
+    D->mNodePairs[w] = v;
+
+    delete_center(D);
   }
-  delNode(u); //! Should we?
+  delNodeCopy(u); //! Should we?
   
   return v;
 }
 
 Slice * Slice::test_choice(node u, node v)
 {
+#if DEBUG
+  printf("In test_choice at nodes %d, %d\n", u->index(), v->index());
+#endif
   NodeArray<node> nCopy;
   EdgeArray<edge> eCopy;
-  Slice S(*this, nCopy, eCopy);
-  identify_nodes(nCopy[u], nCopy[v]);
+  Slice * S = new Slice(*this, nCopy, eCopy);
+
+#if DEBUG
+  S->print_slice_fast();
+#endif
+  List<Disk *> r = S->mDiskNodes[nCopy[u]];
+  S->identify_nodes(nCopy[u], nCopy[v]);
+  forall_listiterators(Disk *, it, r) 
+    (*it)->recompute();
   
-  return embed();
+  Slice * res = S->embed();
+  
+  if (res != S)
+    delete S;
+
+  return res;
 }
 
 Slice * Slice::test_choice_inside(node & u, node v)
@@ -2133,6 +2583,7 @@ Slice * Slice::test_choice_inside(node & u, node v)
 
   List<adjEntry> inc;
   int oldid = u->index();
+  assert(!mDiskNodes[u].size());
   node w = identify_nodes_reversible(u, v, inc);
 
   Slice * res = embed();
@@ -2154,7 +2605,10 @@ Slice * Slice::test_choices(node w)
   List<node> choices(mPoss[w]); // copy mPoss[w] so we can delete w
   forall_listiterators(node, it, choices) {
     node u = *it;
-    res = test_choice_inside(w, u);
+    if (mDiskNodes[w].size())
+      res = test_choice(w, u);
+    else
+      res = test_choice_inside(w, u);
 #if DEBUG
     printf("Coming back (succ=%d) with node %d\n", !!res, w->index());
 #endif
@@ -2334,11 +2788,14 @@ Obstruction * Slice::noncontractible_cycles()
 
 #if DEBUG
   printf("Getting embedding into the plane\n");
-  print_graph(*this);
+  print_graph_fast(*this);
   print_graph_graph6(*this);
 #endif
     
   int planar = test_planarity_with_embedding(*this);
+#if DEBUG
+  printf("The graph is %s.\n", str[planar].c_str());
+#endif
   if (!planar)
     return new Unsolvable();
 
@@ -2424,24 +2881,24 @@ Slice * Slice::embed()
   compute_unselected();
 #if DEBUG
   printf("In Slice::embed - genus %d, orientable: %d, %d unselected edges\n", mGenus, mOrientable, mUnselected);
-  print_slice();
+  print_slice_fast();
   edge e;
   forall_edges(e, *mOrig) {
-    printf("Copies of %s:\n", print_edge_str(e));
+    printf("Copies of %s:", print_edge_str(e));
     print_edge_list(mEdgeCopies[e]);
   }
   
   forall_disks(it, *this) {
     Disk * D = *it;
-    printf("Disk %d:\n", D->id());
+    printf("Disk pairs of %d:\n", D->id());
     forall_listiterators(adjEntry, jt, D->mOrient) {
       node u = (*jt)->theNode();
-      printf("Disk pair: %d->%d\n", index(u), index(D->mNodePairs[u]));
+      printf(" %d->%d", index(u), index(D->mNodePairs[u]));
     }
+    printf("\n");
   }
 
-
-  assert(consistencyCheck());
+  assert(extendedConsistencyCheck());
 #endif
 
   //hide unselected edges
@@ -2693,6 +3150,14 @@ void Slice::set_signatures(Disk * D, EdgeArray<int> & signature, NodeArray<int> 
     node start = twist->twinNode();
     node end = D->mNodePairs[start];
     for (node u = start; u != end; u = D->next(u)) {
+      if (mDiskNodes[u].size() > 1) {
+#if DEBUG
+	printf("Switching to the other half of the disk as node %d is in two disks\n", index(u));
+#endif      
+	twist = D->arc(D->prev(end));
+	break;
+      }
+
       edge e = D->arc(u)->theEdge();
       if (between_disks(e)) {
 #if DEBUG
@@ -2705,8 +3170,9 @@ void Slice::set_signatures(Disk * D, EdgeArray<int> & signature, NodeArray<int> 
     
 #if DEBUG
     printf("Twisting disk at %s\n", print_edge_str(twistorig));
+    if (signature[twistorig] < 0)
+      printf("Changing signature twice, is it ok?\n");
 #endif      
-    assert(signature[twistorig] > 0); //Changing signature twice, is it ok?
     signature[twistorig] = -signature[twistorig];
     node first = twist->twinNode();
     node pair = D->mNodePairs[first];
@@ -2714,7 +3180,7 @@ void Slice::set_signatures(Disk * D, EdgeArray<int> & signature, NodeArray<int> 
     
     for(u = first; u != pair; u = D->next(u)) {
 #if DEBUG
-      printf("(%d)", u->index());
+      printf(" [%d]", u->index());
 #endif    
       edge e = D->arc(u)->theEdge();
       assert(!between_disks(e));
@@ -2722,11 +3188,16 @@ void Slice::set_signatures(Disk * D, EdgeArray<int> & signature, NodeArray<int> 
 	  
       edge h;
       forall_adj_edges(h, u) {
-	if (incident(h, D)) //What if two disks are incident and $h$ is a center edge of the neighboring disk
+	if (incident(h, D)) 
 	  continue;
 	
 	edge f = mEdgeOrig[h];
-	assert(f);
+	if (!f) {
+#if DEBUG
+	  printf(" [Edge %s has no origin (a center edge?)]", print_edge_str(h));
+#endif    
+	  continue;
+	}
 	
 #if DEBUG
 	print_edge(f);
