@@ -1153,6 +1153,8 @@ void Slice::print_disk_fast(Disk * D)
 
 Slice::~Slice()
 {
+  reveal_centers();
+
   forall_disks(it, *this)
     delete *it;
 }
@@ -2209,6 +2211,21 @@ void Slice::add_centers()
   mCentersVisible = 1;
 }
 
+void Slice::reveal_center(Disk * D)
+{
+  if (D->mCenter) {
+    forall_listiterators(edge, it, D->mCenterEdges) {
+      restoreEdge(*it);
+    }
+  }
+}
+
+void Slice::reveal_centers()
+{
+  for(int i=0; i<mDiskNum; i++)
+    reveal_center(mDisks[i]);
+}
+
 void Slice::remove_center(Disk * D)
 {
   assert(D->mCenter);
@@ -2791,8 +2808,9 @@ Obstruction * Slice::noncontractible_cycles()
   print_graph_fast(*this);
   print_graph_graph6(*this);
 #endif
-    
+
   int planar = test_planarity_with_embedding(*this);
+
 #if DEBUG
   printf("The graph is %s.\n", str[planar].c_str());
 #endif
@@ -2907,7 +2925,7 @@ Slice * Slice::embed()
   //hide unselected edges
   //  hide_unselected();
 
-  Obstruction * B;
+  Obstruction * B = NULL;
 
   add_centers();
 
@@ -3492,6 +3510,11 @@ int Embedder::planar()
 
 int Embedder::embed(int genus, int orientable)
 {
+  if (mSlice) {
+    delete mSlice;
+    mSlice = 0;
+  }
+
   Slice * S = new Slice(*this);
   mSlice = S->embed_in_surface(genus, orientable);
   

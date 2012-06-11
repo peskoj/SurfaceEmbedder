@@ -157,6 +157,8 @@ class Slice: public Graph
   int add_disk(Disk * D);
   node add_center(Disk * D);
   void add_centers();
+  void reveal_center(Disk * D);
+  void reveal_centers();
   void remove_center(Disk * D);
   void delete_center(Disk * D);
   void remove_centers();

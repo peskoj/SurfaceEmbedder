@@ -47,5 +47,10 @@ ifneq ($(findstring min_test, $(MAKECMDGOALS)),)
   SUFFIX = -min
 endif
 
-.PHONY: debug devel verbose profile clean opt_paths server min_test
+ifneq ($(findstring info, $(MAKECMDGOALS)),)
+  SWITCHES += -g
+  OGDF_LIB = -L$(HOME)/apps/ogdf/OGDF/_debug/
+endif
+
+.PHONY: debug devel verbose profile clean opt_paths server min_test info
 

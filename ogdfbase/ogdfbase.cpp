@@ -470,8 +470,9 @@ int test_planarity_with_embedding(Graph & G)
     printf("Warning: Graph is not connected!\n");
 #endif
 
-  SList <KuratowskiWrapper> list;
+  SList<KuratowskiWrapper> list;
   BoyerMyrvold BM;
+  //planar = BM.planarEmbed(G, list, 0, false);
   planar = BM.planarEmbed(G, list, -2);
 
 #if STATISTICS
