@@ -1,0 +1,51 @@
+OGDFBASE = ogdfbase
+EMBEDDER = embedder
+OGDF_INC = -I$(HOME)/apps/ogdf/OGDF/ -I$(OGDFBASE) -I$(EMBEDDER)
+%OGDF_INC = -I$(HOME)/apps/ogdf/OGDF/ 
+OGDF_LIB = -L$(HOME)/apps/ogdf/OGDF/_release/
+VPATH = $(OGDFBASE) $(EMBEDDER)
+
+SWITCHES = -Wall
+
+ifeq  ($(findstring debug, $(MAKECMDGOALS)),)
+  SWITCHES += -O3 #-DOPT_PATHS
+  SUFFIX = -opt
+endif
+
+ifneq ($(findstring devel, $(MAKECMDGOALS)),)
+  SWITCHES += -DCUTTER #-DMIN_TEST 
+  SUFFIX = -dev
+endif
+
+ifneq ($(findstring debug, $(MAKECMDGOALS)),)
+  SWITCHES += -g -D DEBUG -D VERBOSE -DSTATISTICS
+  SUFFIX = -deb
+  OGDF_LIB = -L$(HOME)/apps/ogdf/OGDF/_debug/
+endif
+
+ifneq ($(findstring verbose, $(MAKECMDGOALS)),)
+  SWITCHES += -D VERBOSE -DSTATISTICS
+  SUFFIX = -ver
+endif
+
+ifneq ($(findstring profile, $(MAKECMDGOALS)),)
+  SWITCHES += -pg
+  LINK_SWITCHES += -pg
+endif
+
+ifneq ($(findstring opt_paths, $(MAKECMDGOALS)),)
+  SWITCHES += -DOPT_PATHS
+endif
+
+ifneq ($(findstring server, $(MAKECMDGOALS)),)
+  LINK_OBJ += `find server -name "*.o"`
+  ARCH = -arch ppc
+endif
+
+ifneq ($(findstring min_test, $(MAKECMDGOALS)),)
+  SWITCHES += -DMIN_TEST
+  SUFFIX = -min
+endif
+
+.PHONY: debug devel verbose profile clean opt_paths server min_test
+
