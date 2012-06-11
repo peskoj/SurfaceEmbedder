@@ -14,6 +14,7 @@ int tdel = 1; //test deletion
 int genus = 2; //euler genus (2x orientable genus)
 int orientable = 1; //+1 orientable, -1 non-orientable, 0 Euler genus
 int testall = 0; //test all edges for deletion/contraction
+int pRaw = 0; //Graph6 (raw) input
 vector< pair<int,int> > fix;
 
 int fixed_edge(edge e) 
@@ -143,14 +144,20 @@ int test_contraction(Graph & H)
   return !minimal;
 }
 
-
+int read(Graph & G) 
+{
+  if (pRaw)
+    return read_graph_graph6(G);
+  else
+    return read_graph(G);
+}
 
 
 int main(int argc, char ** argv)
 {
 
   int c;
-  while ((c = getopt (argc, argv, "acdCDg:o:e:")) != -1)
+  while ((c = getopt (argc, argv, "acdCDg:o:e:r")) != -1)
     switch (c)
       {
       case 'a':
@@ -190,13 +197,16 @@ int main(int argc, char ** argv)
       case '?':
 	printf("Unknown argument '-%c'\n", optopt);
 	return 1;
+      case 'r':
+	pRaw = 1;
+	break;
       default:
 	abort();
       }
 
 
   fprintf(stderr, "Testing for minimality: genus %d, orientable: %d, testing deletion: %d, testing contraction: %d, fixed edges: %d\n", 
-	  genus, orientable, tdel, tcont, fix.size());
+	  genus, orientable, tdel, tcont, (int)fix.size());
 #if VERBOSE
   if (!fix.empty()) {
     printf("Fixed edges:");
@@ -209,7 +219,7 @@ int main(int argc, char ** argv)
 
   Graph G;
 
-  while (read_graph(G)) {
+  while (read(G)) {
 #if VERBOSE
     print_graph(G);
 #endif
@@ -246,6 +256,7 @@ int main(int argc, char ** argv)
 
 #if !VERBOSE
     print_graph(G);
+    fflush(stdout);
 #endif
     
   }

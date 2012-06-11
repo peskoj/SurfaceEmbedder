@@ -3,24 +3,21 @@
 using namespace std;
 using namespace ogdf;
 
-extern BoyerMyrvold BM;
+int pOrientability = -1;
+int pDel = 0;
 
-extern string str[2];
-extern string stremb[2];
-extern string strkur[2];
-extern string strsubtype[16];
-extern string strmin[2];
-extern string strres[2];
+int g, ng = 0;
 
-int g, ng;
-
-#if MIN_TEST
 int smaller_genus(Graph & G)
 {
-  int res = genus_nonorientable(G);
-  return ng - res;
+  if (pOrientability >= 0 && graph_genus(G) < g)
+    return 1;
+
+  if (pOrientability <= 0 && graph_genus_nonorientable(G) < ng)
+    return 1;
+
+  return 0;
 }
-#endif
 
 int main()
 {
@@ -31,13 +28,15 @@ int main()
     print_graph(G);
 #endif
 
-    g = genus(G);
+    if (pOrientability >= 0)
+      g = graph_genus(G);
 
 #if VERBOSE
     printf("The graph has orientable genus %d.\n", g);
 #endif
 
-    ng = genus_nonorientable(G);
+    if (pOrientability <= 0)
+      ng = graph_genus_nonorientable(G);
 
 #if VERBOSE
     printf("The graph has non-orientable genus %d.\n", ng);
@@ -48,11 +47,12 @@ int main()
     printf("Graph of genus %d, non-orientable genus %d\n", g, ng);
 #endif
 
-#if MIN_TEST
-    int min = test_edge_deletion(G, &smaller_genus);
-    printf("Graph is %s\n", strmin[!min].c_str());
-#endif
-    
+    if (pDel) {
+      int reducible = test_edge_deletion(G, &smaller_genus);
+      
+      if (!reducible)
+	printf("Graph is deletion-minimal\n");
+    }
   }
 
   return 0;

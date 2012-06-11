@@ -2814,21 +2814,24 @@ Slice * Slice::cut_cycles(Obstruction * B)
   printf("In cut_cycles, genus=%d\n", mGenus);
 #endif
 
-  if (!mGenus)
-    return 0;
-  
   assert(B);
+
+  Slice * emb = 0;
+
+  if (!mGenus) {
+    delete B;
+    return emb;
+  }
+  
 #if DEBUG
   printf("Obstruction with %d cycles\n", B->numCycles());
   for (int j=0; (uint)j<B->numCycles(); j++)
     print_edge_list(B->cycle(j));
 #endif
-
   
   NodeArray<node> vCopy;
   EdgeArray<edge> eCopy;
   
-  Slice * emb = 0;
   Cycle act;
 
   for (int i = 0; (uint)i<B->numCycles(); i++) {
@@ -3108,9 +3111,9 @@ void Slice::set_signatures(Disk * D, EdgeArray<int> & signature, NodeArray<int> 
 	
 #if DEBUG
 	print_edge(f);
+	if (signature[f] < 0)
+	  printf("Changing signature twice, is it ok?\n"); //Possible when f is a chord
 #endif      
-	
-	assert(signature[f] > 0); //Changing signature twice, is it ok?
 	
 	signature[f] = -signature[f];
       }
@@ -3779,8 +3782,8 @@ int Embedder::unique_emb(edge e, edge f)
   if (mFaceInc[a] == mLeft[a] || mFaceInc[b] == mLeft[b])
     return 0;
 
-  if (mFaceInc[a] == mFaceInc[b] && mLeft[a] == mLeft[b] ||
-      mFaceInc[a] == mLeft[b] && mLeft[a] == mFaceInc[b])
+  if ((mFaceInc[a] == mFaceInc[b] && mLeft[a] == mLeft[b]) ||
+      (mFaceInc[a] == mLeft[b] && mLeft[a] == mFaceInc[b]))
     return 0;
       
   return 1;

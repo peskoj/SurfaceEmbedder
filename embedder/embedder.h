@@ -101,6 +101,12 @@ class DiskTripod: public Obstruction {
 
 
 class Unsolvable: public Obstruction {
+ public:
+  Unsolvable() { 
+#if DEBUG
+    printf("Unsolvable obstruction created!\n");
+#endif
+  }
 };
 
 class Slice: public Graph

@@ -3,8 +3,6 @@
 using namespace std;
 using namespace ogdf;
 
-BoyerMyrvold BM;
-
 #if STATISTICS
 int planarcount = 0;
 #endif
@@ -358,7 +356,7 @@ int read_graph_graph6(Graph & G)
     scanf("%c", &c);
     c -= 63;
     for (int j = 0; j < 6 && y < n; j++) {
-      if (c & (1 << j))
+      if (c & (0x20 >> j))
 	G.newEdge(nodes[x], nodes[y]);
       x++;
       if (x == y) {
@@ -449,6 +447,7 @@ int test_planarity(Graph & G)
     printf("Warning: Graph is not connected!\n");
 #endif
 
+  BoyerMyrvold BM;
   planar = BM.planar(G);
 
 #if STATISTICS
@@ -472,6 +471,7 @@ int test_planarity_with_embedding(Graph & G)
 #endif
 
   SList <KuratowskiWrapper> list;
+  BoyerMyrvold BM;
   planar = BM.planarEmbed(G, list, -2);
 
 #if STATISTICS
@@ -493,7 +493,8 @@ int test_planarity_bounded(Graph & G, int c, SList<KuratowskiWrapper> &output)
     printf("Warning: Graph is not connected!\n");
 #endif
 
-  planar = BM.planarEmbed(G, output, c, false);
+  BoyerMyrvold BM;
+   planar = BM.planarEmbed(G, output, c, false);
 
 #if STATISTICS
   planarcount++;
@@ -1035,6 +1036,8 @@ void transform(Graph & G, KuratowskiWrapper & K, KuratowskiSubdivision & S)
 {
   NodeArray<int> count(G, 0);
   EdgeArray<int> ecount(G, 0);
+
+  BoyerMyrvold BM;
   BM.transform(K, S, count, ecount);
 }
 
@@ -1506,7 +1509,7 @@ int compute_faces(Graph & G, EdgeArray<int> & orient)
       int right = 1;
       while (right < 0 || !visited[b]) {
 
-#if DEBUG
+#if DEBUG2
 	printf("At edge %d->%d oriented %d on side %d\n", b->theNode()->index(), b->twinNode()->index(), orient[b->theEdge()], right);
 #endif
 
@@ -1548,13 +1551,7 @@ int compute_faces(Graph & G, EdgeArray<int> & orient)
   return faces;
 }
 
-
-#if VERBOSE
-static int mingenus;
-static int orientable;
-#endif
-
-int genus_rec(Graph & G, EdgeArray<int> & orient, node v)
+int genus_rec(Graph & G, EdgeArray<int> & orient, node v) //!!! Only cubic graphs!
 {
 #if DEBUG
   printf("In genus_rec at node %d\n", v->index());
@@ -1569,12 +1566,12 @@ int genus_rec(Graph & G, EdgeArray<int> & orient, node v)
     printf("Embedding computed of genus %d with %d faces\n", g, faces);
 #endif
 
-#if VERBOSE
-    if (g + orientable < mingenus) {
-      mingenus = g + orientable;
-      print_emb(G, orient, g);
-    }
-#endif
+// #if VERBOSE
+//     if (g + orientable < mingenus) {
+//       mingenus = g + orientable;
+//       print_emb(G, orient, g);
+//     }
+// #endif
 
     return g;
   }
@@ -1582,24 +1579,22 @@ int genus_rec(Graph & G, EdgeArray<int> & orient, node v)
   g = genus_rec(G, orient, v->succ());
 
 #if DEBUG
-  printf("Adjacency of %d:", v->index());
-  adjEntry a;
-  forall_adj(a, v) 
-    printf(" %d(%d)", a->twinNode()->index(), a->cyclicSucc()->twinNode()->index());
+  printf("Coming back to node %d\n", index(v));
+  print_emb(G);
 #endif
 
-  G.swapAdjEdges(v->firstAdj(), v->lastAdj());
+  G.moveAdjAfter(v->lastAdj(), v->firstAdj());
+  //  G.swapAdjEdges(v->firstAdj(), v->lastAdj());
 
 #if DEBUG
-  printf(" changed to");
-  forall_adj(a, v) 
-    printf(" %d(%d)", a->twinNode()->index(), a->cyclicSucc()->twinNode()->index());
-  printf("\n");
+  printf("Swap:\n");
+  print_emb(G);
 #endif
 
   int g2 = genus_rec(G, orient, v->succ());
 
-  G.swapAdjEdges(v->firstAdj(), v->lastAdj());
+  G.moveAdjAfter(v->lastAdj(), v->firstAdj());
+  //  G.swapAdjEdges(v->firstAdj(), v->lastAdj());
 
   return (g2 < g)? g2 : g;  
 }
@@ -1611,50 +1606,52 @@ int graph_genus(Graph & G)
 #endif
   EdgeArray<int> orient(G, 1);
 
-#if VERBOSE
-  mingenus = G.numberOfEdges();
-#endif
+// #if VERBOSE
+//   mingenus = G.numberOfEdges();
+// #endif
 
   int g = genus_rec(G, orient, G.firstNode());
 
   return g;
 }
 
-int genus_edge(Graph & G, EdgeArray<int> & span, EdgeArray<int> & orient, edge e, int nonor)
+int genus_edge(Graph & G, EdgeArray<int> & span, EdgeArray<int> & orient, edge next)
 {
   int g;
-  if (!e) {
-#if VERBOSE
-    orientable = !nonor;
-#endif
-
+  if (!next) {
+    
 #if DEBUG
-  printf("Signature:");
-  edge e;
-  forall_edges(e, G) {
-    printf("%s", strsig[orient[e] < 0].c_str());
+    printf("Signature:");
+    edge f;
+    forall_edges(f, G) {
+      printf("%s", strsig[orient[f] < 0].c_str());
+    }
+    forall_edges(f, G) {
+      printf(" %d-%d", f->source()->index(), f->target()->index());
   }
-  forall_edges(e, G) {
-    printf(" %d-%d", e->source()->index(), e->target()->index());
-  }
-  printf("\n");
+    printf("\n");
 #endif
     
     g = genus_rec(G, orient, G.firstNode());
-
-    if (!nonor)
-      g += 1;
+    
+    g += 1;
+    edge e;
+    forall_edges(e, G) {
+      if (orient[e] < 0) {
+	g -= 1;
+	break;
+      }
+    }
 
     return g;
   }
 
-  g = genus_edge(G, span, orient, e->succ(), nonor);
-  if (!span[e]) {
-    orient[e] = -1;
-    int g2 = genus_edge(G, span, orient, e->succ(), 1);
-    orient[e] = 1;
+  g = genus_edge(G, span, orient, next->succ());
+  if (!span[next]) {
+    orient[next] = -1;
+    int g2 = genus_edge(G, span, orient, next->succ());
+    orient[next] = 1;
     g = min(g, g2);
-
   }
 
   return g;
@@ -1673,11 +1670,11 @@ int graph_genus_nonorientable(Graph & G)
 
   DFS(G, visited, span, G.firstNode());
 
-#if VERBOSE
-  mingenus = G.numberOfEdges();
-#endif
+// #if VERBOSE
+//   mingenus = G.numberOfEdges();
+// #endif
 
-  return genus_edge(G, span, orient, G.firstEdge(), 0);
+  return genus_edge(G, span, orient, G.firstEdge());
 }
 
 

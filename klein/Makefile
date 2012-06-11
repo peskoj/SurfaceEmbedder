@@ -1,13 +1,18 @@
-OGDF_INC = /home/pskoda/apps/ogdf/OGDF/
-OGDF_LIB = /home/pskoda/apps/ogdf/OGDF/_release/
+OGDFBASE = ogdfbase
+EMBEDDER = embedder
 
-all: test
+OGDF_INC = -I$(HOME)/apps/ogdf/OGDF/ -I$(OGDFBASE) -I$(EMBEDDER)
+OGDF_LIB = -L$(HOME)/apps/ogdf/OGDF/_release/ \
+	   -L$(HOME)/apps/ogdf/OGDF/_debug/
 
-clean: 
-	rm *.o
+VPATH = $(OGDFBASE) $(EMBEDDER)
 
-.PHONY: genus test clean debug devel verbose profile opt_paths server min_test
+all: recurse code
 
+clean:
+	+@$(MAKE) -w -C $(OGDFBASE) clean
+	+@$(MAKE) -w -C $(EMBEDDER) clean
+	rm -f *o runmintester*
 
 SWITCHES = -Wall
 
@@ -19,75 +24,52 @@ endif
 ifneq ($(findstring devel, $(MAKECMDGOALS)),)
   SWITCHES += -DMIN_TEST -DDEVEL
   SUFFIX = -dev
+  GOALS += devel
 endif
 
 ifneq ($(findstring debug, $(MAKECMDGOALS)),)
-  SWITCHES += -g -D DEBUG -D VERBOSE
+  SWITCHES += -g -D DEBUG -D VERBOSE -DSTATISTICS
   SUFFIX = -deb
+  GOALS += debug
 endif
 
 ifneq ($(findstring verbose, $(MAKECMDGOALS)),)
-  SWITCHES += -D VERBOSE
+  SWITCHES += -D VERBOSE -DSTATISTICS
+  SUFFIX = -ver
+  GOALS += verbose
 endif
 
 ifneq ($(findstring profile, $(MAKECMDGOALS)),)
   SWITCHES += -pg
   LINK_SWITCHES += -pg
+  GOALS += profile
 endif
 
 ifneq ($(findstring opt_paths, $(MAKECMDGOALS)),)
   SWITCHES += -DOPT_PATHS
 endif
 
-ifneq ($(findstring server, $(MAKECMDGOALS)),)
-  LINK_OBJ += `find server -name "*.o"`
-  ARCH = -arch ppc
-endif
 
-ifneq ($(findstring min_test, $(MAKECMDGOALS)),)
-  SWITCHES += -DMIN_TEST
-  SUFFIX = -min
-endif
+.PHONY: code devel clean verbose debug recurse
 
+#---------------------- recurse -----------------------------------
 
-#------ runtorus -------
-
-
-test: runklein$(SUFFIX)
-
-
-OBJECTS = ogdfbase$(SUFFIX).o test-klein$(SUFFIX).o
-OBJPAT =  ogdfbase%.o test-klein%.o
-
-$(OBJECTS): ogdfbase.h
-
-test-klein%.o: test-klein.cpp
-	@echo To get: $@ from $^ input $<
-	g++ $(SWITCHES) -c -o $@ -I$(OGDF_INC) test-klein.cpp
-
-ogdfbase%.o: ogdfbase.cpp
-	@echo To get: $@ from $^ input $<
-	g++ $(SWITCHES) -c -o $@ -I$(OGDF_INC) ogdfbase.cpp
-
-runklein%: $(OBJPAT)
-	@echo Need: $(OBJECTS)
-	g++ $(LINK_SWITCHES) -o $@ $^ $(LINK_OBJ) -L$(OGDF_LIB) -lOGDF
+recurse: 
+	+@$(MAKE) -w -C $(OGDFBASE) ogdf $(GOALS)
+	+@$(MAKE) -w -C $(EMBEDDER) base $(GOALS)
 
 #---------- genus ------------
 
-genus: rungenus$(SUFFIX)
+code: rungenus$(SUFFIX)
 
+OBJECTS = $(OGDFBASE)/ogdfbase$(SUFFIX).o $(EMBEDDER)/embedder$(SUFFIX).o genus$(SUFFIX).o
+OBJPAT =  $(OGDFBASE)/ogdfbase%.o $(EMBEDDER)/embedder%.o genus%.o
 
-OBJECTS = ogdfbase$(SUFFIX).o genus$(SUFFIX).o
-OBJPAT =  ogdfbase%.o genus%.o
-
-$(OBJECTS): ogdfbase.h
-
-genus%.o: genus.cpp
+genus%.o: genus.cpp ogdfbase.h embedder.h
 	@echo To get: $@ from $^ input $<
-	g++ $(SWITCHES) -c -o $@ -I$(OGDF_INC) genus.cpp
+	g++ $(SWITCHES) -c -o $@ $(OGDF_INC) genus.cpp
 
 rungenus%: $(OBJPAT)
 	@echo Need: $(OBJECTS)
-	g++ $(LINK_SWITCHES) -o $@ $^ $(LINK_OBJ) -L$(OGDF_LIB) -lOGDF
+	g++ $(LINK_SWITCHES) -o $@ $^ $(OGDF_LIB) -lOGDF -lpthread
 
