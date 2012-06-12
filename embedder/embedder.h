@@ -109,6 +109,15 @@ class Unsolvable: public Obstruction {
   }
 };
 
+class UnknownObstruction: public Obstruction {
+ public:
+  UnknownObstruction() { 
+#if DEBUG
+    printf("Unknown obstruction created!\n");
+#endif
+  }
+};
+
 class Slice: public Graph
 {
  private:

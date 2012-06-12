@@ -12,8 +12,8 @@ clean:
 #---------------------- recurse -----------------------------------
 
 recurse: 
-	+@$(MAKE) -w -C $(OGDFBASE) all $(GOALS)
-	+@$(MAKE) -w -C $(EMBEDDER) all $(GOALS)
+	+@$(MAKE) -w -C $(OGDFBASE) all $(MAKECMDGOALS)
+	+@$(MAKE) -w -C $(EMBEDDER) all $(MAKECMDGOALS)
 
 #---------------------- embedder-proj----------------------
 

@@ -888,7 +888,7 @@ Slice::Slice(const Slice & slice, NodeArray<node> & vCopy, EdgeArray<edge> & eCo
 
 #if DEBUG
   forall_edges(e, *mOrig) {
-    printf("Copies of %s:\n", print_edge_str(e));
+    printf("Copies of %s:", print_edge_str(e));
     print_edge_list(mEdgeCopies[e]);
   }
 #endif
@@ -2403,7 +2403,7 @@ Obstruction * Slice::is_non_orientable()
       if (mDisks[i]->mId < mDisks[i]->pair()->mId) {
 	int res = test_disks_orientation(mOrientable, mDisks[i], mDisks[i]->pair());
 	if (!res)
-	  return new Unsolvable();
+	  return new UnknownObstruction();
       }
     }
   }
@@ -2416,7 +2416,7 @@ Obstruction * Slice::is_non_orientable()
 	  return NULL;
       }
     }
-    return new Unsolvable();
+    return new UnknownObstruction();
   }
   
   return NULL;
@@ -2798,7 +2798,7 @@ Obstruction * Slice::noncontractible_cycles()
 #endif
 	trace(it, obstructions)
 	  delete *it;
-	return new Unsolvable();
+	return new UnknownObstruction();
       }
     }
   }
@@ -2832,14 +2832,7 @@ Slice * Slice::cut_cycles(Obstruction * B)
   printf("In cut_cycles, genus=%d\n", mGenus);
 #endif
 
-  assert(B);
-
   Slice * emb = 0;
-
-  if (!mGenus) {
-    delete B;
-    return emb;
-  }
   
 #if DEBUG
   printf("Obstruction with %d cycles\n", B->numCycles());
@@ -2937,14 +2930,19 @@ Slice * Slice::embed()
   printf("Slice is %s with %d unselected edges\n", str[!B].c_str(), mUnselected);
 #endif
 
-  Slice * emb = 0;
+  Slice * emb = NULL;
   if (!B) {
     if (!mUnselected)
       emb = this;
     else
       emb = extend_embedding();
   } else {
-    emb = cut_cycles(B);
+    if (!mGenus)
+      delete B;
+    else {
+      assert(B->numCycles()); //Otherwise it is an unknown obstruction!
+      emb = cut_cycles(B);
+    }
   }
 
 #if DEBUG
