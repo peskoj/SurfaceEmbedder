@@ -1928,7 +1928,34 @@ void Slice::regroup(Disk * D)
   }
 }
 
-void Slice::cut_off_disk(Disk * D, EdgeArray<int> & disk, Disk * newD)
+void Slice::extend_poss(NodeArray<node> & copy, NodeArray<node> & move)
+{
+  node v;
+  forall_nodes(v, *this) {
+    List<node> tmp(mPoss[v]);
+    forall_listiterators(node, it, tmp) {
+      node u = *it;
+
+      if (copy[u]) {
+#if DEBUG
+	printf("From %d, new option %d for node %d\n", index(u), index(copy[u]), index(v));
+#endif
+	mPoss[v].pushBack(copy[u]); //!!!Can we break the for cycle?
+      }
+      
+
+      if (move[u]) {
+#if DEBUG
+	printf("Moving option %d to %d for node %d\n", index(u), index(move[u]), index(v));
+#endif
+	list_remove(mPoss[v], u);
+	mPoss[v].pushBack(move[u]);
+      }
+    }
+  }
+}
+
+void Slice::cut_off_disk(Disk * D, EdgeArray<int> & disk, Disk * newD) //!!! Buggy, correct before use
 {
 #if DEBUG
   printf("Slice::cut_off_disk, disk %d from disk %d\n", D->id(), newD->id());
@@ -1969,6 +1996,53 @@ void Slice::cut_off_disk(Disk * D, EdgeArray<int> & disk, Disk * newD)
   } 
 
   orient_disk(newcycle, mDiskInc, D);
+}
+
+void Slice::cut_off_disk_and_join(Disk * D, Disk * newD)
+{
+#if DEBUG
+  printf("Slice::cut_off_disk_and_join, disk %d from disk %d\n", D->id(), newD->id());
+#endif
+
+  List<node> inside;
+  List<node> boundary;
+  NodeArray<node> copy(*this, NULL);
+  NodeArray<node> move(*this, NULL);
+
+  forall_listiterators(adjEntry, it, D->mOrient) {
+    adjEntry a = *it;
+    node v = a->theNode();
+    if (incident(v, newD)) {
+      if (incident(D->prev(v), newD) && incident(a->twinNode(), newD)) {
+	inside.pushBack(v);
+	move[v] = newD->mNodePairs[v];
+      } else {
+	boundary.pushBack(v);
+	copy[v] = newD->mNodePairs[v];
+      }
+    }
+  }
+  
+  extend_poss(copy, move);
+  
+  forall_listiterators(node, it, inside) {
+    node v = *it;
+
+    List<adjEntry> adj;
+    adjEntries(v, adj);
+
+    forall_listiterators(adjEntry, it, adj) {
+      adjEntry a = *it;
+      edge e = a->theEdge();
+      if (incident(e, D)) 
+	continue;
+      
+#if DEBUG
+      printf("Moving arc %s to the node %d\n", print_arc_str(a), index(newD->mNodePairs[v]));
+#endif
+      moveAdjEntry(a, newD->mNodePairs[v]);      
+    }
+  }
 }
 
 void Slice::duplicate(node u, List<node> & nodes, Disk * D1, Disk * D2)
@@ -2031,8 +2105,11 @@ void Slice::duplicate_cycle(Cycle & cycle, Disk * D1, Disk * D2)
 #if DEBUG
 	printf("Edge %s is a disk edge (disk %d), group %d\n", print_edge_str(e), disk_edge(e), disk_group(e));
 #endif
-
-	cut_off_disk(disk(e), einc, D1);
+	
+	if (true) //!!! Here should be test for touching only a single disk
+	  cut_off_disk_and_join(disk(e), D1);
+	else
+	  cut_off_disk(disk(e), einc, D1);
       } else {
 	node w = newNodeCopy(v);
 	moveAdjEntry(a, w);
@@ -3493,6 +3570,10 @@ Embedder::Embedder(const Graph & G, NodeArray< node > & mapNode, EdgeArray< edge
 Embedder::Embedder(const Embedder & G): Graph(G), mSlice(G.mSlice), mSliceEmb(0), mSignature(*this, 0)
 {
   
+}
+
+Embedder::Embedder(): mSlice(0), mSliceEmb(0), mSignature(*this, 0)
+{
 }
 
 Embedder::~Embedder()

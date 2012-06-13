@@ -187,8 +187,10 @@ class Slice: public Graph
   void duplicate_cycle(Cycle & cycle, Disk * D1, Disk * D2);
   void create_one_disk(Cycle & cycle);
   void create_two_disks(Cycle & cycle);
-  void cut_off_disk(Disk * D, EdgeArray<int> & disk, Disk * newD);
+  void cut_off_disk(Disk * D, EdgeArray<int> & disk, Disk * newD); //!!!Buggy, do not use
+  void cut_off_disk_and_join(Disk * D, Disk * newD);
   void join_disks(Disk * D1, Disk * D2, node source, node target);
+  void extend_poss(NodeArray<node> & copy, NodeArray<node> & move);
 
   //  int disjoint_ears(Disk * D, Cycle * cycles);
   int test_ears(Cycle * cycles);
@@ -326,6 +328,7 @@ class Embedder: public Graph
   Embedder(const Graph & G, NodeArray< node > & mapNode, EdgeArray< edge > & mapEdge);
   Embedder(const Graph & G);
   Embedder(const Embedder & G);
+  Embedder();
   ~Embedder();
   
   int planar();

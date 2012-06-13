@@ -1,6 +1,6 @@
 OGDFBASE = ogdfbase
 EMBEDDER = embedder
-OGDF_INC = -I$(HOME)/apps/ogdf/OGDF/ -I$(OGDFBASE) -I$(EMBEDDER)
+OGDF_INC = -I$(HOME)/apps/ogdf/OGDF/ -I$(OGDFBASE) -I$(EMBEDDER) -I$(HOME)/include
 %OGDF_INC = -I$(HOME)/apps/ogdf/OGDF/ 
 OGDF_LIB = -L$(HOME)/apps/ogdf/OGDF/_release/
 VPATH = $(OGDFBASE) $(EMBEDDER)
@@ -51,6 +51,9 @@ ifneq ($(findstring info, $(MAKECMDGOALS)),)
   SWITCHES += -g
   OGDF_LIB = -L$(HOME)/apps/ogdf/OGDF/_debug/
 endif
+
+LIBS = -lOGDF -ljson
+LIB_PATHS = $(OGDF_LIB) -L$(HOME)/lib/json
 
 .PHONY: debug devel verbose profile clean opt_paths server min_test info
 

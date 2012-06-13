@@ -370,6 +370,7 @@ void print_graph_graph6(Graph & G);
 void print_local_emb(node v);
 void print_emb(Graph & G);
 void print_emb(Graph & G, EdgeArray<int> & orient, int genus);
+int read_emb(Graph & G, EdgeArray<int> & signature);
 int index(node u);
 
 int read_graph(Graph & G);

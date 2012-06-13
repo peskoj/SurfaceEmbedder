@@ -1,4 +1,6 @@
 #include "ogdfbase.h"
+#include "json/json.h"
+#include <iostream>
 
 using namespace std;
 using namespace ogdf;
@@ -267,22 +269,26 @@ void print_emb(Graph & G, EdgeArray<int> & orient, int genus)
 {
   printf("Embedding of genus %d:\n", genus);
 
+  printf("{");
   node v;
   forall_nodes(v, G) {
     adjEntry a;
-    printf("%d:[", v->index());
+    printf("\"%d\":[", v->index());
     if (v->degree())
       forall_adj(a, v) {
-	printf("%d", a->twinNode()->index());
-	if (orient[a->theEdge()] < 0)
-	  printf("-");
+	string sign = "-";
+	if (orient[a->theEdge()] > 0)
+	  sign = "";
+	printf("\"%s%d\"", sign.c_str(), a->twinNode()->index());
 	if (a->succ())
 	  printf(", ");
       }
-    printf("], ");
+    printf("]");
+    if (v != G.lastNode())
+      printf(", ");
   }
 
-  printf("\n");
+  printf("}\n");
 }
 
 void print_emb(Graph & G)
@@ -292,6 +298,68 @@ void print_emb(Graph & G)
   print_emb(G, signature, 0);
 }
 
+int read_emb(Graph & G, EdgeArray<int> & signature)
+{
+  G.clear();
+
+  vector<node> nodes(MAXN, NULL);
+
+  string s;
+  if (feof(stdin))
+    return 0;
+  getline(cin, s);
+#if DEBUG
+  cout << "Reading embedding: " << s << endl;
+#endif
+
+  Json::Value root;
+  Json::Reader reader;
+  bool succ = reader.parse(s, root);
+
+  if (!succ) {
+#if DEBUG
+    cout << "Reader failed to parse the string: " << reader.getFormatedErrorMessages() << endl;
+#endif
+    return 0;
+  }
+
+  trace(it, root) {
+    Json::Value v = *it;
+    int x = atoi(it.memberName());
+    if (!nodes[x])
+      nodes[x] = G.newNode(x);
+
+    trace(eit, v) {
+      Json::Value u = *eit;
+      int sign = 1;
+      const char * str = u.asCString();
+      assert(str);
+      if (str[0] == '-') {
+	sign = -1;
+	str++;
+      }
+
+      int y = atoi(str);
+      if (!nodes[y])
+	nodes[y] = G.newNode(y);
+      edge e = G.searchEdge(nodes[x], nodes[y]);
+      if (!e) {
+	e = G.newEdge(nodes[x], nodes[y]);
+	signature[e] = sign;
+      }
+      assert(signature[e] == sign);
+
+      adjEntry a = e->adjSource();
+      if (a->theNode() != nodes[x])
+	a = a->twin();
+
+      if (a != nodes[x]->lastAdj())
+	G.moveAdjAfter(a, nodes[x]->lastAdj());
+    }
+  }
+
+  return 1;
+}
 
 int index(node u) {
   if (u)

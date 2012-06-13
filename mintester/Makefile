@@ -2,9 +2,7 @@ include Makefile.profiles
 
 all: recurse code
 
-clean:
-	+@$(MAKE) -w -C $(OGDFBASE) clean
-	+@$(MAKE) -w -C $(EMBEDDER) clean
+clean: recurse
 	rm -f *o runmintester*
 
 .PHONY: code
@@ -12,8 +10,8 @@ clean:
 #---------------------- recurse -----------------------------------
 
 recurse: 
-	+@$(MAKE) -w -C $(OGDFBASE) all $(MAKECMDGOALS)
-	+@$(MAKE) -w -C $(EMBEDDER) all $(MAKECMDGOALS)
+	+@$(MAKE) -w -C $(OGDFBASE) $(MAKECMDGOALS)
+	+@$(MAKE) -w -C $(EMBEDDER) $(MAKECMDGOALS)
 
 #---------------------- embedder-proj----------------------
 
@@ -28,4 +26,4 @@ mintester%.o: mintester.cpp ogdfbase.h embedder.h
 
 runmintester%: $(OBJPAT)
 	@echo Need: $(OBJECTS)
-	g++ $(LINK_SWITCHES) -o $@ $^ $(OGDF_LIB) -lOGDF -lpthread
+	g++ $(LINK_SWITCHES) -o $@ $^ $(LIB_PATHS) $(LIBS)
