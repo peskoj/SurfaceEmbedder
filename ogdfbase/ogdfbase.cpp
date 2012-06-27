@@ -1,6 +1,7 @@
 #include "ogdfbase.h"
 #include "json/json.h"
 #include <iostream>
+#include <sstream>
 
 using namespace std;
 using namespace ogdf;
@@ -48,6 +49,14 @@ int edgecmp(const void * px, const void * py) {
     return max(ax, bx) - max(ay, by);
   
   return 0;
+}
+
+string int2string(int x) {
+  stringstream strm;
+  string num;
+  strm << x;
+  strm >> num;
+  return num;
 }
 
 //--------------------- Input & output -----------------------------

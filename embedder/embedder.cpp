@@ -1,6 +1,10 @@
 #include "ogdfbase.h"
 #include "embedder.h"
 
+#if USE_COIN
+#include <ogdf/energybased/FMMMLayout.h>
+#include <ogdf/energybased/CoinTutteLayout.h>
+#endif
 
 using namespace std;
 using namespace ogdf;
@@ -1092,6 +1096,157 @@ void Slice::print_slice()
     print_disk(mDisks[i], ind);
 
   printf("\n");
+}
+
+void Slice::draw_slice(char * filename)
+{
+#if VERBOSE
+  printf("Drawing slice (file %s)\n", filename);
+#endif
+  int nsides = 10; //maximum number of sides - 1
+
+  node v;
+
+  GraphCopy G(*this);
+
+  List<node> del;
+  forall_nodes(v, *this)
+    if (is_center(v) || !v->degree())
+      del.pushBack(v);
+  forall_listiterators(node, it, del)
+    G.delNode(G.copy(*it));
+
+  if (mDiskNum == 2 && mOrientable == -1 && !mDisks[0]->has_pair()) {
+    Disk * D1 = mDisks[0];
+    Disk * D2 = mDisks[1];
+    List<node> common;
+    NodeArray<int> side(*this, 0);
+    int cs[nsides];
+    for(int i=0; i<nsides; i++)
+      cs[i] = 0;
+
+    List<node> fixedNodes;
+
+    node start = NULL;
+    node trans = NULL;
+
+#if DEBUG
+    printf("Searching for the common vertices\n");
+#endif
+
+    forall_listiterators(adjEntry, it, D1->mOrient) {
+      node u = (*it)->theNode();
+      if (incident(u, D2))
+	if (incident(D1->prev(u), D2)) {
+	  if (incident(D1->next(u), D2))
+	    common.pushBack(u);
+	  else
+	    trans = u;
+	} else 
+	  start = u;
+    }
+
+    if (common.size()) {
+#if DEBUG
+      printf("Determining sides\n");
+#endif
+    
+      node u = start;
+      int act = 1;
+      while (u != trans) {
+	fixedNodes.pushBack(u);
+	if (D2->mNodePairs[u] == trans)
+	  act++;
+	if (D2->mNodePairs[u] == start)
+	  act++;
+	side[u] = act;
+	cs[act]++;
+	u = D2->next(u);
+      }
+      
+      act++;
+      while (u != start) {
+	fixedNodes.pushBack(u);
+	if (D1->mNodePairs[u] == trans)
+	  act++;
+	if (D1->mNodePairs[u] == start)
+	  act++;
+	side[u] = act;
+	cs[act]++;
+	u = D1->next(u);
+      }
+      
+#if DEBUG
+      printf("Disk sides (total %d):", fixedNodes.size());
+      for (int i=1; i<act; i++)
+	printf(" %d", cs[i]);
+      printf("\n");
+#endif
+
+      // Remove extra nodes in the intersection of the disks
+
+      forall_listiterators(node, it, common)
+	G.delNode(G.copy(*it));
+
+      //Graph attributes describe the position of nodes
+      GraphAttributes GA(G, GraphAttributes::nodeGraphics | GraphAttributes::edgeGraphics |
+			 GraphAttributes::nodeLabel | GraphAttributes::nodeWeight);
+
+      double bw = 11.0, bh = 8.0;
+      double dx[nsides], dy[nsides];
+      dx[1] = 0.0; dy[1] = bh/(cs[1]);
+      dy[2] = 0.0; dx[2] = bw/(cs[2]);
+      dx[3] = 0.0; dy[3] = -bh/(cs[3]+cs[4]);
+      dx[4] = 0.0; dy[4] = -bh/(cs[3]+cs[4]);
+      dy[5] = 0.0; dx[5] = -bw/(cs[5]+cs[6]);
+      dy[6] = 0.0; dx[6] = -bw/(cs[5]+cs[6]);
+    
+      double px = 0.0;
+      double py = 0.0;
+
+      forall_nodes(v,G) {
+	GA.width(v) = GA.height(v) = 0.01;
+	int s = side[G.original(v)];
+	if (s)
+	  GA.shapeNode(v) = GraphAttributes::rectangle;
+	else
+	  GA.shapeNode(v) = GraphAttributes::oval;
+	GA.labelNode(v) = int2string(index(mNodeOrig[G.original(v)])).c_str();
+      }
+
+      forall_listiterators(node, it, fixedNodes) {
+	node u = *it;
+#if DEBUG
+	printf("Node %d (orig %d) at position %.1f,%.1f on side %d\n", index(u), index(mNodeOrig[u]), px, py, side[u]);
+#endif
+	node cu = G.copy(u);
+	GA.x(cu) = px;
+	GA.y(cu) = py;
+	px += dx[side[u]];
+	py += dy[side[u]];
+      }
+
+      //     TutteLayout layout;
+    
+      // #if DEBUG
+      //     printf("Laying out the graph\n");
+      // #endif
+      //     layout.call(GA, fixedNodes);
+      // #if DEBUG
+      //     printf("Layout created\n");
+      // #endif
+
+      GA.writeGML(filename);
+#if DEBUG
+      printf("Boundary layout written to %s\n", filename);
+#endif
+    
+      return;
+    }
+  }
+#if VERBOSE
+  printf("Drawing onto this surface not implemented\n");
+#endif VERBOSE
 }
 
 void Slice::read_disk(Disk * D, Array<node> & nodes)
@@ -3478,6 +3633,7 @@ void Slice::set_embedding(EdgeArray<int> & signature)
     
 #if DEBUG
     printf("Reorienting %d (from %d)\n", index(v), index(u));
+    consistencyCheck();
 #endif
 
     adjEntry a = u->firstAdj();
@@ -3499,8 +3655,8 @@ void Slice::set_embedding(EdgeArray<int> & signature)
       printf("At %d->%d, original %d->%d, sign %d\n", index(a->theNode()), index(a->twinNode()), index(orig->theNode()), index(orig->twinNode()), sign);
 #endif
 
-      if (last)
-	moveAdjAfter(orig, last);
+      if (last) 
+	mOrig->moveAdjAfter(orig, last);
 
       last = orig;
 
@@ -3929,6 +4085,12 @@ int Embedder::orientable_emb()
       return -1;
   }
   return 1;
+}
+
+void Embedder::draw_emb(char * filename)
+{
+  assert(mSlice);
+  mSlice->draw_slice(filename);
 }
 
 //---------------------- Face ---------------------------------------------

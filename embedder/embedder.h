@@ -275,6 +275,8 @@ class Slice: public Graph
   int disk_num() { return mDiskNum; };
   bool extendedConsistencyCheck();
   bool valid_cycle(Cycle & C);
+
+  void draw_slice(char * filename = (char *)"tmp.layout.gml");
 };
 
 class Embedder;
@@ -336,6 +338,7 @@ class Embedder: public Graph
   int set_embedding(Slice * slice = 0);
   int check_embedding(int gen, int orientable);
   int orientable_emb();
+  void draw_emb(char * filename = (char *)"tmp.layout.gml");
   inline EdgeArray<int> & signature() { return mSignature; }
 
   int genus();

@@ -27,6 +27,10 @@ int fixed_edge(edge e)
   return 0;
 }
 
+char * filename = (char *)"tmp-lay-%d.gml";
+char buffer[50];
+int pictcount = 0;
+
 int test_embeddable(Graph & G)
 {
   Embedder E(G);
@@ -35,6 +39,8 @@ int test_embeddable(Graph & G)
   if (mg <= genus) {
     E.set_embedding();
     print_emb(E, mg);
+    sprintf(buffer, filename, pictcount++);
+    E.draw_emb(buffer);
     int g = E.compute_genus();
     printf("The graph is embeddable into the surface of genus %d orientable %d, claimed genus %d, required %d,%d)\n", g, E.orientable_emb(), mg, genus, orientable);
     if (g >= genus)

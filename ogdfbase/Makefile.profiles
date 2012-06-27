@@ -1,14 +1,16 @@
 OGDFBASE = ogdfbase
 EMBEDDER = embedder
 OGDF_INC = -I$(HOME)/apps/ogdf/OGDF/ -I$(OGDFBASE) -I$(EMBEDDER) -I$(HOME)/include
-%OGDF_INC = -I$(HOME)/apps/ogdf/OGDF/ 
+%OGDF_INC = -I$(HOME)/apps/ogdf/OGDF/ -I$(OGDFBASE) -I$(EMBEDDER) -I$(HOME)/include -I/Volumes/Gridstore/pskoda/apps/coin/Clp-1.14.6/include/coin
 OGDF_LIB = -L$(HOME)/apps/ogdf/OGDF/_release/
 VPATH = $(OGDFBASE) $(EMBEDDER)
+%LINK_SWITCHES = -static
 
 SWITCHES = -Wall
+%SWITCHES = -Wall -DUSE_COIN -DCOIN_OSI_CLP
 
 ifeq  ($(findstring debug, $(MAKECMDGOALS)),)
-  SWITCHES += -O3 #-DOPT_PATHS
+  SWITCHES += -O3 
   SUFFIX = -opt
 endif
 
@@ -18,7 +20,7 @@ ifneq ($(findstring devel, $(MAKECMDGOALS)),)
 endif
 
 ifneq ($(findstring debug, $(MAKECMDGOALS)),)
-  SWITCHES += -g -D DEBUG -D VERBOSE -DSTATISTICS
+  SWITCHES += -g -D DEBUG -D VERBOSE -DSTATISTICS -DOGDF_DEBUG
   SUFFIX = -deb
   OGDF_LIB = -L$(HOME)/apps/ogdf/OGDF/_debug/
 endif
@@ -52,8 +54,10 @@ ifneq ($(findstring info, $(MAKECMDGOALS)),)
   OGDF_LIB = -L$(HOME)/apps/ogdf/OGDF/_debug/
 endif
 
-LIBS = -lOGDF -ljson
-LIB_PATHS = $(OGDF_LIB) -L$(HOME)/lib/json
+LIBS = -lOGDF -ljson -lpthread 
+%LIBS = -lOGDF -ljson -lpthread -lOsiClp -lClp -lOsi -lCoinUtils -lbz2 -lz
+LIB_PATHS = $(OGDF_LIB) -L$(HOME)/lib/json 
+%LIB_PATHS = $(OGDF_LIB) -L$(HOME)/lib/json -L$(HOME)/apps/coin/Clp-1.14.6/lib
 
 .PHONY: debug devel verbose profile clean opt_paths server min_test info
 

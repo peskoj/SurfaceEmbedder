@@ -1,0 +1,8 @@
+[
+{ "cmd": "runmintester-opt | wc -l", "input": "data/graphs-14.in", "output":"9" },
+{ "cmd": "runmintester-opt | wc -l", "input": "data/graphs-16.in", "output":"20" },
+{ "cmd": "runmintester-opt | wc -l", "input": "data/graphs-18.in", "output":"133" },
+{ "cmd": "runmintester-opt | wc -l", "input": "data/torus/graphs-20.in", "output":"39" },
+{ "cmd": "runmintester-opt | wc -l", "input": "data/torus/graphs-22.in", "output":"2" },
+{ "cmd": "runmintester-opt | wc -l", "input": "data/torus/graphs-24.in", "output":"2" },
+]

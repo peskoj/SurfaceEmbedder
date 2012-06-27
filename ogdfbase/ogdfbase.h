@@ -349,6 +349,7 @@ int cycle_cmp(const void * a, const void * b);
 int value_function(int x);
 bool cycle_cmp_bool(const Cycle & a, const Cycle & b);
 
+string int2string(int);
 
 //------------------- Exported functions ---------------------------------
 
