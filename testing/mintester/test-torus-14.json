@@ -1,1 +1,1 @@
-{ "cmd": "runmintester-opt | wc -l", "input": "data/graphs-14.in", "output":"9" }
+{ "cmd": "runmintester-opt | wc -l", "inputfile": "data/graphs-14.in", "output":"9" }

@@ -9,3 +9,6 @@
 
 #ignore binaries
 run*
+
+#ignore temp files
+temp*

@@ -27,7 +27,7 @@ int fixed_edge(edge e)
   return 0;
 }
 
-char * filename = (char *)"tmp-lay-%d.gml";
+char * filename = (char *)"temp-lay-%d.gml";
 char buffer[50];
 int pictcount = 0;
 

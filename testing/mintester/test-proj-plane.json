@@ -1,0 +1,4 @@
+[
+{ "cmd": "runmintester-opt -g1 -o-1 | wc -l", "inputfile": "data/projplanesub.in", "output":"103" },
+{ "cmd": "runmintester-opt -d -g1 -o-1 | wc -l", "inputfile": "data/projplane.in", "output":"35" }
+]

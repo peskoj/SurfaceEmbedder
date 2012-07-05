@@ -1,0 +1,11 @@
+[
+{ "cmd": "runmintester-opt -o-1", "inputfile": "testing/mintester/test-klein.1.in", "output":"" },
+{ "cmd": "relabel.py 0.111 | runmintester-opt -o-1", "inputfile": "testing/mintester/test-klein.1.in", "output":"" },
+{ "cmd": "relabel.py 0.222 | runmintester-opt -o-1", "inputfile": "testing/mintester/test-klein.1.in", "output":"" },
+{ "cmd": "relabel.py 0.333 | runmintester-opt -o-1", "inputfile": "testing/mintester/test-klein.1.in", "output":"" },
+{ "cmd": "relabel.py 0.444 | runmintester-opt -o-1", "inputfile": "testing/mintester/test-klein.1.in", "output":"" },
+{ "cmd": "runmintester-opt -o-1 | wc -l", "inputfile": "testing/mintester/test-klein.2.in", "output":"1" },
+{ "cmd": "relabel.py 0.1 | runmintester-opt -o-1 | wc -l", "inputfile": "testing/mintester/test-klein.2.in", "output":"1" },
+{ "cmd": "relabel.py 0.2 | runmintester-opt -o-1 | wc -l", "inputfile": "testing/mintester/test-klein.2.in", "output":"1" },
+{ "cmd": "relabel.py 0.3 | runmintester-opt -o-1 | wc -l", "inputfile": "testing/mintester/test-klein.2.in", "output":"1" }
+]
