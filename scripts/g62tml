@@ -1,0 +1,2 @@
+#!/bin/bash
+cat | sed 's#\(.*\)#<graph repr="g6" label="\1" terminals="(0, 1)" />#'

@@ -15,6 +15,7 @@ int genus = 2; //euler genus (2x orientable genus)
 int orientable = 1; //+1 orientable, -1 non-orientable, 0 Euler genus
 int testall = 0; //test all edges for deletion/contraction
 int pRaw = 0; //Graph6 (raw) input
+int pDraw = 0;
 vector< pair<int,int> > fix;
 
 int fixed_edge(edge e) 
@@ -39,8 +40,10 @@ int test_embeddable(Graph & G)
   if (mg <= genus) {
     E.set_embedding();
     print_emb(E, mg);
-    sprintf(buffer, filename, pictcount++);
-    E.draw_emb(buffer);
+    if (pDraw) {
+      sprintf(buffer, filename, pictcount++);
+      E.draw_emb(buffer);
+    }
     int g = E.compute_genus();
     printf("The graph is embeddable into the surface of genus %d orientable %d, claimed genus %d, required %d,%d)\n", g, E.orientable_emb(), mg, genus, orientable);
     if (g >= genus)
@@ -163,7 +166,7 @@ int main(int argc, char ** argv)
 {
 
   int c;
-  while ((c = getopt (argc, argv, "acdCDg:o:e:r")) != -1)
+  while ((c = getopt (argc, argv, "acdCDg:o:e:rwW")) != -1)
     switch (c)
       {
       case 'a':
@@ -199,6 +202,9 @@ int main(int argc, char ** argv)
 	  printf("Error: Surface orientability is either -1, 0, or 1!\n");
 	  return 1;
 	}
+	break;
+      case 'w':
+	pDraw = 1;
 	break;
       case '?':
 	printf("Unknown argument '-%c'\n", optopt);

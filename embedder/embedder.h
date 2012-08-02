@@ -354,6 +354,7 @@ class Embedder: public Graph
   int same_face(edge e, edge f);
   int same_face(edge e, node u);
   int same_face(node u, node v);
+  int same_face(node u, node v, node w);
   int unique_emb(edge e, edge f);
 };
 

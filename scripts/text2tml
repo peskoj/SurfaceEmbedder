@@ -1,0 +1,2 @@
+#!/bin/bash
+cat | xargs -n1 | gconvert graph6 | sed 's#\(.*\)#<graph repr="g6" label="\1" terminals="(0, 1)" />#'

@@ -10,6 +10,7 @@ extern int planarcount;
 #endif
 
 int contraction = 0;
+int deletion = 0;
 
 int jumps = 0;
 int triads = 0;
@@ -36,6 +37,8 @@ void filter_graph(Graph & G)
 
     node u = nodes[p.x1()];
     node v = nodes[p.x2()];
+    assert(u && v && u != v);
+
     G.newEdge(u,v);
   }
 
@@ -57,9 +60,20 @@ void contraction_factory(Graph & H)
     G.contract(e);
     makeSimpleUndirected(G);
 
-#if VERBOSE
-    print_graph(H);
-#endif
+    filter_graph(G);
+  }
+}
+
+void deletion_factory(Graph & H)
+{
+  edge f;
+  forall_edges(f, H) {
+    GraphCopySimple G(H);
+    
+    edge e = G.copy(f);
+    G.delEdge(e);
+    makeSimpleUndirected(G);
+
     filter_graph(G);
   }
 }
@@ -184,23 +198,35 @@ void triad_factory(Embedder & E)
   printf("triad_factory\n");
 #endif
 
-  node u;
+  node u, v, w;
   forall_nodes(u, E) {
-    if (u->degree() != 3)
-      continue;
-    
-    GraphCopySimple G(E);
-  
-    node v = G.newNode();
+    forall_nodes(v, E) {
+      if (v->index() <= u->index())
+	continue;
+      if (!E.same_face(u, v))
+	continue;
 
-    adjEntry a;
-    forall_adj(a, u) {
-      node w = a->twinNode();
+      forall_nodes(w, E) {
+	if (w->index() <= v->index())
+	  continue;
 
-      G.newEdge(G.copy(w), v);
+	if (E.same_face(u, v, w))
+	  continue;
+	if (!E.same_face(w, u))
+	  continue;
+	if (!E.same_face(w, v))
+	  continue;
+
+	GraphCopySimple G(E);
+	
+	node z = G.newNode();
+	G.newEdge(G.copy(u), z);
+	G.newEdge(G.copy(v), z);
+	G.newEdge(G.copy(w), z);
+	
+	filter_graph(G);
+      }
     }
-
-    filter_graph(G);
   }
 }
 
@@ -282,6 +308,29 @@ void construct_cross(Graph & H, node x1, node x2, node y1, node y2)
   filter_graph(G);
 }
 
+void construct_cross(Graph & H, edge x1, edge x2, edge y1, edge y2)
+{
+#if DEBUG
+  printf("construct_cross %d-%d, %d-%d\n", x1->index(), y1->index(), x2->index(), y2->index());
+#endif
+
+  GraphCopySimple G(H);
+
+  edge x1c = G.copy(x1);
+  edge y1c = G.copy(y1);
+  edge x2c = G.copy(x2);
+  edge y2c = G.copy(y2);
+
+  node u1 = subdivide_edge(G, x1c);  
+  node v1 = subdivide_edge(G, y1c);  
+  node u2 = subdivide_edge(G, x2c);  
+  node v2 = subdivide_edge(G, y2c);  
+  G.newEdge(u1, v1);
+  G.newEdge(u2, v2);
+  
+  filter_graph(G);
+}
+
 void cross_factory(Embedder & E)
 {
 #if DEBUG
@@ -294,23 +343,28 @@ void cross_factory(Embedder & E)
     for (it1 = F->adj().begin(); it1.valid(); ++it1) {
       adjEntry a1 = *it1;
       node u1 = a1->theNode();
+      //edge e1 = a1->theEdge();
       
       ListIterator<adjEntry> it2;
       for (it2 = it1.succ(); it2.valid(); ++it2) {
 	adjEntry a2 = *it2;
 	node u2 = a2->theNode();
+	//edge e2 = a2->theEdge();
 
 	ListIterator<adjEntry> it3;
 	for (it3 = it2.succ(); it3.valid(); ++it3) {
 	  adjEntry a3 = *it3;
 	  node u3 = a3->theNode();
+	  //edge e3 = a3->theEdge();
 
 	  ListIterator<adjEntry> it4;
 	  for (it4 = it3.succ(); it4.valid(); ++it4) {
 	    adjEntry a4 = *it4;
 	    node u4 = a4->theNode();
+	    //edge e4 = a4->theEdge();
 	    
 	    construct_cross(E, u1, u2, u3, u4);
+	    //construct_cross(E, e1, e2, e3, e4);
 	  }
 	}
       }
@@ -323,7 +377,7 @@ int main(int argc, char ** argv)
 
   int c;
   int u = 0, v = 0;
-  while ((c = getopt (argc, argv, "cCjJtTpPrRfFg:o:e:")) != -1)
+  while ((c = getopt (argc, argv, "cCdDjJtTpPrRfFg:o:e:")) != -1)
     switch (c)
       {
       case 'c':
@@ -331,6 +385,12 @@ int main(int argc, char ** argv)
 	break;
       case 'C':
 	contraction = 0; 
+	break;
+      case 'd':
+	deletion = 1;
+	break;
+      case 'D':
+	deletion = 0; 
 	break;
       case 'j':
 	jumps = 1;
@@ -388,7 +448,8 @@ int main(int argc, char ** argv)
       }
 
 
-  fprintf(stderr, "Running factory: genus %d, orientable %d, contraction %d, jumps %d, filter %d\n", genus, orientable, contraction, jumps, filter);
+  fprintf(stderr, "Running factory: genus %d, orientable %d, deletion %d, contraction %d, jumps %d, crosses %d, triads %d, tripods %d, filter %d\n", 
+	  genus, orientable, deletion, contraction, jumps, crosses, triads, tripods, filter);
   
   Graph G;
 
@@ -402,6 +463,10 @@ int main(int argc, char ** argv)
 
     if (contraction) {
       contraction_factory(G);
+    }
+
+    if (deletion) {
+      deletion_factory(G);
     }
 
     Embedder E(G);
@@ -428,7 +493,7 @@ int main(int argc, char ** argv)
     if (crosses)
       cross_factory(E);
 
-    filter_graph(G);
+    //filter_graph(G);
   }
 
 #if STATISTICS

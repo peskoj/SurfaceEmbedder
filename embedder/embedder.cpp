@@ -3996,7 +3996,7 @@ Face & Embedder::neighbor_face(Face & F, edge e)
   if (f == F.id())
     return *mLeftFace[e->adjSource()];
   else
-    return F;
+    return *mLeftFace[e->adjTarget()];
 }
 
 int Embedder::same_face(edge e, edge f)
@@ -4026,6 +4026,39 @@ int Embedder::same_face(node u, node v)
     forall_adj_edges(f, v) 
       if (same_face(e, f))
 	return 1;
+  }
+  return 0;
+}
+
+int Embedder::same_face(node u, node v, node w)
+{
+  edge e;
+  edge f;
+  edge g;
+  forall_adj_edges(e, u) {
+    forall_adj_edges(f, v) { 
+      forall_adj_edges(g, w) {
+	adjEntry a = e->adjSource();
+	adjEntry b = f->adjSource();
+	adjEntry c = g->adjSource();
+	if (mFaceInc[a] == mFaceInc[b] && mFaceInc[b] == mFaceInc[c])
+	  return 1;
+	if (mFaceInc[a] == mFaceInc[b] && mFaceInc[b] == mLeft[c])
+	  return 1;
+	if (mFaceInc[a] == mLeft[b] && mLeft[b] == mFaceInc[c])
+	  return 1;
+	if (mFaceInc[a] == mLeft[b] && mLeft[b] == mLeft[c])
+	  return 1;
+	if (mLeft[a] == mFaceInc[b] && mFaceInc[b] == mFaceInc[c])
+	  return 1;
+	if (mLeft[a] == mFaceInc[b] && mFaceInc[b] == mLeft[c])
+	  return 1;
+	if (mLeft[a] == mLeft[b] && mLeft[b] == mFaceInc[c])
+	  return 1;
+	if (mLeft[a] == mLeft[b] && mLeft[b] == mLeft[c])
+	  return 1;
+      }
+    }
   }
   return 0;
 }

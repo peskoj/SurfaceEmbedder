@@ -1,0 +1,2 @@
+#!/bin/bash
+neato -Tpdf -Goverlap=False -Gsplines=True

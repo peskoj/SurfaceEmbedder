@@ -12,3 +12,4 @@ run*
 
 #ignore temp files
 temp*
+log

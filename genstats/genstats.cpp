@@ -164,6 +164,7 @@ int main(int argc, char ** argv)
 	break;
       case 'p':
 	oPrint = 1;
+	break;
       case '?':
 	printf("Unknown argument '-%c'\n", optopt);
 	return 1;
@@ -204,7 +205,14 @@ int main(int argc, char ** argv)
     node x = nodes[terminals.first];
     node y = nodes[terminals.second];
 
-    edge xy = E.newEdge(x, y);
+    edge xy = E.searchEdge(x, y);
+#if VERBOSE
+    if (xy)
+      printf("The edge xy is already present\n");
+#endif
+
+    if (!xy)
+      xy = E.newEdge(x, y);
     int gp = E.min_genus(genus, orientable);
     E.delEdge(xy);
 
