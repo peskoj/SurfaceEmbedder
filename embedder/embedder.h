@@ -196,8 +196,6 @@ class Slice: public Graph
   int test_ears(Cycle * cycles);
   int is_planar_embedding(Cycle * cycles);
   void kuratowski_analysis(KuratowskiSubdivision & S, int isK33, vector<Obstruction *> & obstructions);
-  //int construct_cycles(KuratowskiSubdivision & S, int isK33, Cycle * rcycles, int &cnum, CycleData & cycledata);
-  //int choose_cycles(KuratowskiSubdivision & S, int isK33, Cycle * cycles, CycleData & cycledata);
   Obstruction * choose_obstruction(vector<Obstruction *> & obstructions);
   
   int disk_orientation(Disk * D, int withcenters = 1);

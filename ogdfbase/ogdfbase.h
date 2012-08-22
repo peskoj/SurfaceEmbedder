@@ -275,81 +275,6 @@ template <typename LIST, typename IT >
 typedef List<edge> Cycle;
 typedef pair<node, List<edge> > Path;
 
-class GraphCutter: public GraphCopySimple
-{
- private:
-
-#if DEBUG
-  int rcount;
-  long long rcode;
-#endif
-
-  Graph & orig;
-
-  vector<adjEntry> halfedges;
-  AdjEntryArray<int> orient;
-  AdjEntryArray<edge> eorient;
-  AdjEntryArray<edge> forient;
-  EdgeArray<int> cedge;
-  NodeArray<int> cnode;
-  List<node> nodes;
-
-  EdgeArray<edge> ecopy;
-  NodeArray<node> ncopy;
-
-  List<edge> out;
-  List<edge> cycle;
-
-  node center;
-  List<edge> mod;
-
-#if DISK_DEVEL
-  Disk * disk;
-  int disk_emb;
-  NodeArray<int> indisk;
-#endif
-
-  void duplicate(node u);
-  void duplicate_cycle();
-  void create_one_disk();
-  void create_two_disks();
-
-  void orient_edges(List<edge> & edges);
-  inline void show_edge(edge e);
-  inline void clear_edges();
-  inline void hide_edges();
-
-  int test_all_codes(int (GraphCutter::*test)(), int (*validcode)(int));
-  int test_tree_codes(int (GraphCutter::*test)());
-  int test_tree_codes_recurse(List<edge>::iterator it, int (GraphCutter::*test)());
-
-  int planar();
-
-  int test_disks_proj();
-  int test_disks_klein1();
-  int test_disks_klein2();
-  int test_disks_torus();
-  int test_jump(int (*test)(Graph &));
-
-  void init();
- public:
- GraphCutter(Graph & G, List<edge> & c) : GraphCopySimple(G), orig(G), orient(G, 0), eorient(G, 0), forient(G, 0), 
-    cedge(G, 0), cnode(G, 0), ecopy(*this, 0), ncopy(*this, 0), cycle(c)
-#if DISK_DEVEL
-    ,disk(0), disk_emb(0)
-#endif
-      {}
-
-  int cut_along_cycle_torus();
-  int cut_along_cycle_proj();
-  int cut_along_cycle_klein1();
-  int cut_along_cycle_klein2();
-
-#if DISK_DEVEL
-  int set_fixed_disk(Disk * d);
-#endif
-
-};
 
 //---------------- small functions ---------------------------------------
 
@@ -393,7 +318,6 @@ int test_planarity(Graph & G);
 int test_planarity_with_embedding(Graph & G);
 int test_planarity_bounded(Graph & G, int c, SList<KuratowskiWrapper> &output);
 
-
 void remove_isolated(Graph & G);
 adjEntry get_adj(edge e, node v);
 int min_cut(Graph & G, node a, node b, NodeArray<int> & cut);
@@ -411,35 +335,13 @@ void all_paths(Graph & G, EdgeArray<int> & subg, int subgi, node source, NodeArr
 void kuratowski_nodes(KuratowskiSubdivision & S, vector<node> & nodes, int isK33);
 int best_k_graph(Graph & G, KuratowskiWrapper & R);
 
-
-void duplicate(GraphCopySimple & H, node u, NodeArray<node> & copy, NodeArray<int> & cnode, List<node> & nodes);
-
 void transform(Graph & G, KuratowskiWrapper & K, KuratowskiSubdivision & S);
 
 void concat(Cycle & C, KuratowskiSubdivision & S, const int * edges, int count);
 void append_cycle(Cycle & C, KuratowskiSubdivision & S, int edge, int rev);
 int is_cycle(Cycle & C);
 
-int findpairs(Graph & G, vector<adjEntry> &halfedges, NodeArray<int> & cnode, vector< Tuple2<int,int> > & pairs);
-
 int eval_cycles(Graph & G, KuratowskiWrapper & K);
-int construct_cycles(Graph & G, KuratowskiWrapper & K, List<edge> * cycle, int & cnum);
-int best_cycles(Graph & G, KuratowskiWrapper & K, Cycle * cycles);
-
-int test_minimality(Graph & G);
-int test_edge_deletion(Graph & G, int (*test)(Graph & G));
-
-int test_torus(Graph & G);
-int test_torus_multiple(Graph & G);
-int test_torus_cutter(Graph & G);
-
-int test_projective(Graph & G);
-int test_projective_multiple(Graph & G);
-int test_projective_cutter(Graph & G);
-
-int test_klein(Graph & G);
-int test_klein_multiple(Graph & G);
-int test_klein_cutter(Graph & G);
 
 int graph_genus(Graph & G);
 int graph_genus_nonorientable(Graph & G);

@@ -16,6 +16,270 @@ extern string strsubtype[16];
 extern string strmin[2];
 extern string strres[2];
 
+//------------------------- Minimality tests -----------------------------
+
+int test_edge_deletion(Graph & G, int (*test)(Graph & G))
+{
+  bool minimal = true;
+  edge e;
+  List<edge> edges;
+  forall_edges(e, G) {
+    edges.pushBack(e);
+  }
+
+  int ec = 0;
+  forall_listiterators(edge, it, edges) {
+    e = *it;
+    assert(e);
+
+#if VERBOSE
+    node u = e->source();
+    node v = e->target();
+#endif
+
+#if DEBUG
+    printf("Deleting edge between %d and %d\n", u->index(), v->index());
+#endif
+
+    G.hideEdge(e);
+    int res = (*test)(G);
+
+#if DEBUG
+    printf("After deletion of the edge between %d and %d, result = %d.\n", u->index(), v->index(), res);
+#endif
+
+    G.restoreEdge(e);
+
+    ec++;
+
+    if (!res) {
+      minimal = false;
+
+#if VERBOSE
+      printf("Superfluous edge between %d and %d\n", u->index(), v->index());
+#endif
+
+      break;
+    }
+  }
+
+#if VERBOSE
+  printf("# of edges tested: %d\n", ec);
+  printf("The graph is deletion-%s.\n", strmin[minimal].c_str());
+#endif
+
+  return !minimal;
+}
+
+
+#if MIN_TEST
+int test_cycles(Graph & G, NodeArray<int> & nodes, NodeArray<int> & comps, int pieces)
+{
+  node v;
+  forall_nodes(v, G) {
+    if (nodes[v] < pieces)
+      continue;
+
+    int c = 0;
+    edge e;
+    forall_adj_edges(e, v) {
+      node u = e->opposite(v);
+      if (comps[u] != comps[v] || nodes[u] != nodes[v]) 
+	break;
+      c++;
+    }
+    if (c == 3) {
+#if DEBUG
+      printf("Vertex of degree 3 found: %d\n", v->index()); 
+#endif
+      return 0;
+    }
+  }
+  return 1;
+} 
+
+int test_feet(Graph & G, NodeArray<int> & nodes, NodeArray<int> & comps, int cc, int pieces)
+{
+  int feet[cc][pieces];
+
+  for (int i=0;i<cc; i++)
+    for (int j=0;j<pieces; j++)
+      feet[i][j] = 0;
+
+  node v;
+  forall_nodes(v, G) {
+    if (nodes[v] < pieces)
+      continue;
+
+    edge e;
+    forall_adj_edges(e, v) {
+      node u = e->opposite(v);
+
+      if (nodes[u] < pieces)
+	feet[nodes[v]][nodes[u]]++;
+    }
+  }
+
+#if DEBUG
+  for(int i=MAXKS; i<cc; i++) {
+    printf("Bridge %d is attached to:", i);
+    for(int j=0; j<pieces; j++) 
+      if (feet[i][j])
+	printf(" %d(%dx)", j, feet[i][j]);
+    printf("\n");
+  }
+#endif
+
+  return 1;
+}
+
+int minimality_test_kur(Graph & G, KuratowskiWrapper & K)
+{
+  EdgeArray<int> bedges(G, 0);
+  NodeArray<int> bnodes(G, 0);
+
+  node v;
+
+  forall_slistiterators(edge, it, K.edgeList) {
+    edge e = *it;
+    bedges[e] = 1;
+    bnodes[e->source()] = 1;
+    bnodes[e->target()] = 1;
+  }
+
+#if DEBUG
+  print_graph_color(G, bnodes, bedges);
+#endif
+
+  int c = 2;
+  forall_nodes(v, G) {
+    if (!bnodes[v])
+      continue;
+
+    int deg = 0;
+    edge e;
+    forall_adj_edges(e, v)
+      if (bedges[e])
+	deg++;
+
+    if (deg == 3)
+      bnodes[v] = c++;
+  }
+
+
+  forall_nodes(v, G) {
+    if (bnodes[v] != 1)
+      continue;
+    
+    color_comp(bnodes, bedges, 1, v, c);
+    c++;
+  }
+
+  int pieces = c;
+  c = MAXKS;
+#if DEBUG
+  printf("Coloring bridges starting with %d\n", c);
+#endif
+
+  edge e;
+  forall_edges(e, G) {
+    if (bedges[e]) 
+      continue;
+    
+    color_comp(bnodes, bedges, 0, e->source(), c);
+    color_comp(bnodes, bedges, 0, e->target(), c);
+    bedges[e] = c;
+    c++;
+  }
+
+  NodeArray<int> comps(G, 0);
+  forall_nodes(v, G) {
+    if (bnodes[v] < pieces || comps[v])
+      continue;
+
+    two_con_comp(G, bnodes, bnodes[v], comps, v);
+  }
+
+#if DEBUG
+  forall_nodes(v, G) {
+    printf("Node %d in bridge %d comp %d\n", v->index(), bnodes[v], comps[v]);
+  }  
+#endif
+
+  int cycles = test_cycles(G, bnodes, comps, pieces);
+  if (!cycles)
+    return 0;
+
+
+#if DEBUG
+  printf("Trivial bridges:");
+  forall_edges(e, G) {
+    //    printf("Edge %d-%d with color %d\n", e->source()->index(), e->target()->index(), bedges[e]);
+    if (bedges[e] < pieces)
+      continue;
+
+    if (bnodes[e->source()] == bedges[e] || bnodes[e->target()] == bedges[e])
+      continue;
+
+    printf(" %d-%d", bnodes[e->source()], bnodes[e->target()]);
+  }
+  printf("\n");
+#endif
+
+  int feet = test_feet(G, bnodes, comps, c, pieces);
+  if (!feet)
+    return 0;
+  
+  return 1;
+}
+
+
+
+int test_minimality(Graph & G)
+{
+#if DEBUG
+  printf("In minimality_test:\n");
+#endif
+
+  SList<KuratowskiWrapper> output;
+
+  int c = MAXK;
+  int planar = test_planarity_bounded(G, c, output);
+
+#if DEBUG
+    printf("%d Kuratowski subdivision found\n", output.size());
+    printf("The graph is %s.\n", str[planar].c_str());
+#endif
+
+  if (planar)
+    return 2;
+  
+  int m = G.numberOfEdges() + 1; //G.numberOfEdges() + 1;
+  KuratowskiWrapper * K = 0;
+
+  for (SListIterator<KuratowskiWrapper> it = output.begin(); it != output.end(); it++) {
+    KuratowskiWrapper & L = *it;
+
+    int size = L.edgeList.size();
+    
+#if DEBUG
+    printf("%s, subtype %s, of size %d at node %d\n", strkur[L.isK33()].c_str(), strsubtype[L.subdivisionType].c_str(), size, L.V->index());
+
+    printf("Edges:");
+    print_edge_list(L.edgeList);
+#endif
+    if (size < m) {
+      K = &L;
+      m = size;
+    }
+  }
+
+  assert(K);
+
+  return minimality_test_kur(G, *K);
+}
+#endif
+
 int test_deletion(Graph & G)
 {
   bool minimal = true;
@@ -37,26 +301,23 @@ int test_deletion(Graph & G)
 
     G.delEdge(e);
 
-#if CUTTER
-    int torus = test_torus_cutter(G);
-#else
-    int torus = test_torus_multiple(G); // old version
-#endif
+    Embedder E(G);
+    int g = E.min_genus(3, 1);
 
-    if (torus == 2) {
+    if (g <= 2) {
       if (DEBUG)
 	printf("Edge between %d and %d is a jump\n", u->index(), v->index());
       return 1;
     }
 
     if (DEBUG)
-      printf("After deletion of the edge between %d and %d, the graph is %s on the torus.\n", u->index(), v->index(), stremb[torus].c_str());
+      printf("After deletion of the edge between %d and %d, the graph has genus %d.\n", u->index(), v->index(), g);
 
     G.newEdge(u, v);
 
     ec++;
 
-    if (!torus) {
+    if (g > 2) {
       minimal = false;
       if (VERBOSE)
 	printf("Superfluous edge between %d and %d\n", u->index(), v->index());
@@ -85,10 +346,11 @@ int test_contraction(Graph & H)
     G.contract(e);
     makeSimpleUndirected(G);
     
-    bool torus = test_torus(G);
+    Embedder E(G);
+    int g = E.min_genus(3, 1);
     ec++;
 
-    if (!torus) {
+    if (g > 2) {
       minimal = false;
       printf("Contractible edge between %d and %d\n", f->source()->index(), f->target()->index());
       break;
@@ -251,19 +513,14 @@ int main()
       continue;
 #endif
     
-#if CUTTER
-    int torus = test_torus_cutter(G);
-#else
-    int torus = test_torus_multiple(G);
-#endif
+    Embedder E(G);
+    int g = E.min_genus(3, 1);
 
-    assert(torus < 2);
-    
 #if VERBOSE
-      printf("The graph is %s on the torus.\n", stremb[torus].c_str());
+    printf("The graph has genus %d.\n", g);
 #endif
 
-    if (torus)
+    if (g <= 2)
       continue;
 
   
