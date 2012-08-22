@@ -14,7 +14,7 @@
 
 
 #define forall_disks(D, L)  for (Disk ** D = (L).mDisks.begin(); D!=(L).mDisks.end(); ++D)
-#define forall_emb_faces(F, E)  for ((F) = &(E).faces().front(); (F); (F) = (F)->next())
+#define forall_emb_faces(F, E)  trace(F, (E).faces())
 
 class Slice;
 
@@ -260,6 +260,7 @@ class Slice: public Graph
   Graph * original() { return mOrig; }
 
   void pair_disks(Disk * D, AdjEntryArray<adjEntry> & lpair, AdjEntryArray<adjEntry> & rpair, AdjEntryArray<int> & lsign, AdjEntryArray<int> & rsign);
+  bool set_signatures_special(EdgeArray<int> & signature, NodeArray<int> & vsign);
   void set_signatures(Disk * D, EdgeArray<int> & signature, NodeArray<int> & vsign);
   void correct_disk_embedding(Disk * D);
   void set_embedding(EdgeArray<int> & signature);
@@ -320,11 +321,13 @@ class Embedder: public Graph
   AdjEntryArray<Face*> mLeftFace;
   List<Face> mFaces;
   int mFaceNum;
+  bool mFacesConstructed;
 
   adjEntry face_traverse_step(adjEntry & a, int & sign, AdjEntryArray<int> & visited, int face);
   adjEntry face_construct_step(adjEntry & a, int & sign, Face & F);
   int face_traverse(adjEntry a, AdjEntryArray<int> & visited, int face);
   int face_construct(adjEntry a, Face & F);
+  int DFS_resign(NodeArray<int> & visited, EdgeArray<int> & sign, node v);
 
  public:
   Embedder(const Graph & G, NodeArray< node > & mapNode, EdgeArray< edge > & mapEdge);
@@ -345,6 +348,7 @@ class Embedder: public Graph
   int min_genus(int maximum, int orientable);
   int compute_genus();
   int numberOfFaces();
+  int numberOfComponents();
   int compute_faces();
   int construct_faces();
   int compute_singularities();

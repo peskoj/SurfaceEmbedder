@@ -46,11 +46,8 @@ int test_embeddable(Graph & G)
     }
     int g = E.compute_genus();
     printf("The graph is embeddable into the surface of genus %d orientable %d, claimed genus %d, required %d,%d)\n", g, E.orientable_emb(), mg, genus, orientable);
-    if (g >= genus)
-      assert(g == genus);
-      if (orientable)
-	assert(E.orientable_emb() == orientable);
-    }
+    E.check_embedding(mg, orientable);
+  }
 #endif
   return mg <= genus;
 }

@@ -1,0 +1,2 @@
+#!/bin/bash
+labelg -faa | LC_ALL=C sort | LC_ALL=C sort -u 

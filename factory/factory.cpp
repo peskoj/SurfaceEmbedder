@@ -200,13 +200,21 @@ void triad_factory(Embedder & E)
 
   node u, v, w;
   forall_nodes(u, E) {
+    if (u->degree() == 2)
+      continue;
     forall_nodes(v, E) {
+      if (v->degree() == 2)
+	continue;
       if (v->index() <= u->index())
 	continue;
       if (!E.same_face(u, v))
 	continue;
+      if (E.searchEdge(u, v))
+	continue;
 
       forall_nodes(w, E) {
+	if (w->degree() == 2)
+	  continue;
 	if (w->index() <= v->index())
 	  continue;
 
@@ -214,7 +222,11 @@ void triad_factory(Embedder & E)
 	  continue;
 	if (!E.same_face(w, u))
 	  continue;
+	if (E.searchEdge(w, u))
+	  continue;
 	if (!E.same_face(w, v))
+	  continue;
+	if (E.searchEdge(w, v))
 	  continue;
 
 	GraphCopySimple G(E);
@@ -273,11 +285,15 @@ void tripod_factory(Embedder & E)
     forall_listiterators(adjEntry, it1, F->adj()) {
       adjEntry a1 = *it1;
       node u1 = a1->theNode();
+      if (u1->degree() == 2)
+	continue;
 
       forall_listiterators(adjEntry, it2, F->adj()) {
 	adjEntry a2 = *it2;
 	node u2 = a2->theNode();
 	if (u1->index() >= u2->index())
+	  continue;
+	if (u2->degree() == 2)
 	  continue;
 
 	forall_listiterators(adjEntry, it3, F->adj()) {
@@ -285,6 +301,8 @@ void tripod_factory(Embedder & E)
 	  node u3 = a3->theNode();
 	  
 	  if (u2->index() >= u3->index())
+	    continue;
+	  if (u3->degree() == 2)
 	    continue;
 
 	  attach_tripod(E, u1, u2, u3);
@@ -343,24 +361,32 @@ void cross_factory(Embedder & E)
     for (it1 = F->adj().begin(); it1.valid(); ++it1) {
       adjEntry a1 = *it1;
       node u1 = a1->theNode();
+      if (u1->degree() == 2)
+	continue;
       //edge e1 = a1->theEdge();
       
       ListIterator<adjEntry> it2;
       for (it2 = it1.succ(); it2.valid(); ++it2) {
 	adjEntry a2 = *it2;
 	node u2 = a2->theNode();
+	if (u2->degree() == 2)
+	  continue;
 	//edge e2 = a2->theEdge();
 
 	ListIterator<adjEntry> it3;
 	for (it3 = it2.succ(); it3.valid(); ++it3) {
 	  adjEntry a3 = *it3;
 	  node u3 = a3->theNode();
+	  if (u3->degree() == 2)
+	    continue;
 	  //edge e3 = a3->theEdge();
 
 	  ListIterator<adjEntry> it4;
 	  for (it4 = it3.succ(); it4.valid(); ++it4) {
 	    adjEntry a4 = *it4;
 	    node u4 = a4->theNode();
+	    if (u4->degree() == 2)
+	      continue;
 	    //edge e4 = a4->theEdge();
 	    
 	    construct_cross(E, u1, u2, u3, u4);

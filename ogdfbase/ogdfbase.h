@@ -158,7 +158,7 @@ class EdgeCmp: public VComparer < edge >
 };
 
 template <typename A>
-int intersect(List<A> & a, List<A> & b)
+bool intersect_sorted(List<A> & a, List<A> & b)
 {
   ListIterator<A> ita = a.begin();
   ListIterator<A> itb = b.begin();
@@ -166,25 +166,34 @@ int intersect(List<A> & a, List<A> & b)
     while (itb.valid() && *itb < *ita)
       ++itb;
     if (itb.valid() && *ita == *itb)
-      return 1;
+      return true;
     ++ita;
   }
-  return 0;
+  return false;
+}
+
+template <typename A>
+bool intersect(List<A> & a, List<A> & b)
+{
+  trace(ita, a) {
+    trace(itb, b) {
+      if (*ita == *itb) 
+	return true;
+    }
+  }
+  return false;
 }
 
 template <typename A>
 A * first_intersect(List<A*> & a, List<A*> & b)
 {
-  ListIterator<A*> ita = a.begin();
-  ListIterator<A*> itb = b.begin();
-  while (ita.valid()) {
-    while (itb.valid() && *itb < *ita)
-      ++itb;
-    if (itb.valid() && *ita == *itb)
-      return *ita;
-    ++ita;
+  trace(ita, a) {
+    trace(itb, b) {
+      if (*ita == *itb) 
+	return *ita;
+    }
   }
-  return 0;
+  return NULL;
 }
 
 template <typename A>

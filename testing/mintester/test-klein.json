@@ -7,5 +7,14 @@
 { "cmd": "runmintester-opt -o-1 | wc -l", "inputfile": "testing/mintester/test-klein.2.in", "output":"1" },
 { "cmd": "relabel.py 0.1 | runmintester-opt -o-1 | wc -l", "inputfile": "testing/mintester/test-klein.2.in", "output":"1" },
 { "cmd": "relabel.py 0.2 | runmintester-opt -o-1 | wc -l", "inputfile": "testing/mintester/test-klein.2.in", "output":"1" },
-{ "cmd": "relabel.py 0.3 | runmintester-opt -o-1 | wc -l", "inputfile": "testing/mintester/test-klein.2.in", "output":"1" }
+{ "cmd": "relabel.py 0.3 | runmintester-opt -o-1 | wc -l", "inputfile": "testing/mintester/test-klein.2.in", "output":"1" },
+{ "cmd": "runmintester-opt -o-1 | wc -l", "inputfile": "testing/mintester/test-klein.3.in", "output":"1" },
+{ "cmd": "relabel.py 0.1 | runmintester-opt -o-1 | wc -l", "inputfile": "testing/mintester/test-klein.3.in", "output":"1" },
+{ "cmd": "relabel.py 0.2 | runmintester-opt -o-1 | wc -l", "inputfile": "testing/mintester/test-klein.3.in", "output":"1" },
+{ "cmd": "relabel.py 0.3 | runmintester-opt -o-1 | wc -l", "inputfile": "testing/mintester/test-klein.3.in", "output":"1" },
+{ "cmd": "relabel.py 0.4 | runmintester-opt -o-1 | wc -l", "inputfile": "testing/mintester/test-klein.3.in", "output":"1" },
+
+{ "cmd": "runmintester-ver -c -o-1 | grep "on the surface" | wc -l", "inputfile": "testing/mintester/test-klein.4.in", "output":"1" },
+{ "cmd": "runmintester-ver -c -o-1 | grep "obstruction" | wc -l", "inputfile": "testing/mintester/test-klein.5.in", "output":"1" }
+{ "cmd": "runmintester-opt -c -o-1 | wc -l", "inputfile": "testing/mintester/test-klein.6.in", "output":"1" }
 ]

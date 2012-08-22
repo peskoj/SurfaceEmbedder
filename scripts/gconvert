@@ -1,0 +1,95 @@
+mode=$1
+
+if [ "$mode" == gml ]; then 
+    while read v e edges; do
+#    echo "Read $v $e $edges"
+	if [ -z "$v" ]; then
+	    break
+	fi
+	input="graph [\n"
+	for ((i=0; i<$v; i++)); do
+	    input="$input node [ id $i ]\n"
+	done
+	
+	for ((i=0; i<$e; i++)); do
+	    read -d' ' source; read -d' ' target;
+	input="$input edge [ source $source target $target ]\n"
+	done <<<$edges;
+	input=$input"]\n"
+	echo $input
+    done
+elif [ "$mode" == maple ]; then
+    echo "with (GraphTheory):"
+    ((k=0))
+    while read v e edges; do
+#    echo "Read $v $e $edges"
+	if [ -z "$v" ]; then
+	    break
+	fi
+	input="G$k := Graph({"
+	
+	for ((i=0; i<$e; i++)); do
+	    if ((i >> 0)); then
+		input="$input, "
+	    fi
+	    read -d' ' source; read -d' ' target;
+	    input="$input{$source, $target}"
+	done <<<$edges;
+	input=$input"});\nDrawGraph(G$k, style=spring);"
+	echo $input
+        ((k++))
+    done  
+elif [ "$mode" == dot ]; then
+    while read v e edges; do
+    	if [ -z "$v" ]; then
+	    break
+	fi
+	echo "graph G {"
+	echo "node [shape=circle, style=filled, label=\"\", fixedsize=True];"
+	label=`echo $v $e $edges | gconvert graph6 | sed 's/\\\\/\\\\\\\\/g'`
+	echo "label=\"$label\";"
+
+	for ((i=0; i<$v; i++)); do
+	    echo "n$i [label=$i];"
+	done
+	
+	for ((i=0; i<$e; i++)); do
+	    read -d' ' source; read -d' ' target
+	    echo "n$source -- n$target;"
+	done <<<$edges;
+	echo "}"
+    done  
+elif [ "$mode" == ps ]; then
+    dir=$2
+    ((k=0))
+    while read v e edges; do
+	echo "Processing: $v $e $edges"
+	if [ -z "$v" ]; then
+	    break
+	fi
+	ssh -T -n $atrey "cd projects/apex; sh convert.sh ps <<< '$v $e $edges'"
+	scp $atrey:projects/apex/noname.dot.pdf .
+	mv noname.dot.pdf ./$dir/graphs-$v-$e-$k.pdf
+        ((k++))
+    done
+    echo Done: $k graphs
+elif [ "$mode" == neato ]; then
+    dir=$2
+    
+    cat > noname.log
+    scp noname.log $atrey:projects/apex/
+    ssh $atrey "cd projects/apex; neato -Tpdf -G.00001 -O < noname.log"
+    scp $atrey:projects/apex/noname.dot.pdf .
+    mv noname.dot.pdf ./$dir/noname.pdf
+elif [ "$mode" == text ]; then
+    cat | listg -e | convert.sed
+elif [ "$mode" == graph6 ]; then
+    cat | text2graph6
+elif [ "$mode" == tg6 ]; then
+    cat | sed 's/.*label="\([^"]*\)".*/\1/'
+elif [ "$mode" == dreadnaut ]; then
+    cat | listg -d | sed /\!/d
+else
+  echo "Mode not recognized"
+  echo "Supported: gml maple graphviz neato ps text graph6 tg6"
+fi

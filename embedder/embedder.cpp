@@ -3280,6 +3280,18 @@ void Slice::check_disk_embedding(Disk * D, int oD)
     printf("Arc %s, back arc %s, center arc %s\n", print_arc_string(a).c_str(), print_arc_string(b).c_str(), print_arc_string(center).c_str()); 
 #endif      
 
+    if (between_disks(a->theEdge()))
+      if (oD > 0) 
+	moveAdjAfter(center, a);
+      else
+	moveAdjBefore(center, a);
+
+    if (between_disks(b->theEdge()))
+      if (oD > 0) 
+	moveAdjBefore(center, b);
+      else
+	moveAdjAfter(center, b);
+
     if (oD > 0) {
       moveAdjBefore(a, center);
       moveAdjAfter(b, center);
@@ -3337,6 +3349,85 @@ void Slice::correct_disk_embedding(Disk * D)
     check_disk_embedding(D, D->mClockwise);
     D->mSign = -1;
   }
+}
+
+/* Special case when one of the disk cycles has to be two-sided */
+bool Slice::set_signatures_special(EdgeArray<int> & signature, NodeArray<int> & vsign)
+{
+#if DEBUG
+  printf("In set_signatures_special\n");
+#endif      
+  
+  Disk * D1 = mDisks[0];
+  Disk * D2 = mDisks[1];
+  node head = NULL;
+
+  forall_listiterators(adjEntry, it, D1->mOrient) {
+    adjEntry a = *it;
+    node u = a->theNode();
+    if (incident(u, D2) && !incident(D1->prev(u), D2) && incident(D1->next(u), D2)) {
+      head = u;
+      break;
+    }
+  }
+
+  /* Check that the special case applies */
+  if (!head || !incident(D1->mNodePairs[head], D2))
+    return false;
+
+#if VERBOSE
+  printf("Special embedding needed: head %d[%d]\n", index(head), index(mNodeOrig[head]));
+#endif    
+
+  edge twist = D1->prev_arc(head)->theEdge();
+  edge twistorig = mEdgeOrig[twist];
+  assert(twistorig);
+  
+  //signature[twistorig] = -signature[twistorig]; 
+  /*Already done below*/
+
+#if DEBUG
+  printf("Twist edge %s[%s]\n", print_edge_string(twist).c_str(), print_edge_string(twistorig).c_str());
+#endif    
+
+  node v = D1->mNodePairs[head];
+  v = D2->next(v);
+  for (;; v = D2->next(v)) {
+    edge e = D2->arc(v)->theEdge();
+    assert(mEdgeOrig[e]);
+
+#if DEBUG
+    printf("At %d[%d] edge %s[%s] twisting", index(v), index(mNodeOrig[v]), print_edge_string(e).c_str(), print_edge_string(mEdgeOrig[e]).c_str());
+#endif    
+
+    vsign[v] = -vsign[v]; //Mark the vertices whose signature is different from the standard signature
+    
+    edge h;
+    forall_adj_edges(h, v) {
+      if (incident(h, D2)) 
+	continue;
+	
+      edge f = mEdgeOrig[h];
+      if (!f) {
+#if DEBUG
+	printf(" [Edge %s has no origin (a center edge?)]", print_edge_str(h));
+#endif    
+	continue;
+      }
+	
+#if DEBUG
+      printf(" %s[%s]", print_edge_string(h).c_str(), print_edge_string(f).c_str());
+#endif      
+      signature[f] = -signature[f];
+    }
+
+#if DEBUG
+    printf("\n");
+#endif      
+    if (mEdgeOrig[e] == twistorig)
+      break;
+  }
+  return true;
 }
 
 void Slice::set_signatures(Disk * D, EdgeArray<int> & signature, NodeArray<int> & vsign)
@@ -3594,11 +3685,12 @@ void Slice::set_embedding(EdgeArray<int> & signature)
     correct_disk_embedding(D);
   }
 
-  for(int i=0; i<mDiskNum; i++) {
-    Disk * D = mDisks[i];
-    if (D->mSign < 0) 
-      set_signatures(D, signature, vsign);
-  }
+  if (mDiskNum != 2 || mDisks[0]->has_pair() || !set_signatures_special(signature, vsign))
+    for(int i=0; i<mDiskNum; i++) {
+      Disk * D = mDisks[i];
+      if (D->mSign < 0) 
+	set_signatures(D, signature, vsign);
+    }
 
   for(int i=0; i<mDiskNum; i++) {
     Disk * D = mDisks[i];
@@ -3714,7 +3806,7 @@ adjEntry Slice::find_adj(node u, node v)
 
 //----------------------- Embedder --------------------------------------
 
-Embedder::Embedder(const Graph & G): Graph(G), mSlice(0), mSliceEmb(0), mSignature(*this, 0)
+Embedder::Embedder(const Graph & G): Graph(G), mSlice(0), mSliceEmb(0), mSignature(*this, 0), mFacesConstructed(0)
 {
 }
 
@@ -3934,6 +4026,7 @@ int Embedder::construct_faces()
 #endif      
 
   compute_faces();
+  mFacesConstructed = true;
 
   mLeft.init(*this, 0);
   mLeftFace.init(*this, 0);
@@ -3975,16 +4068,23 @@ int Embedder::numberOfFaces()
   return mFaceNum;
 }
 
+int Embedder::numberOfComponents()
+{
+  NodeArray<int> c(*this);
+  return connectedComponents(*this, c);
+}
+
 int Embedder::genus()
 {
   int n = numberOfNodes();
   int m = numberOfEdges();
   int f = numberOfFaces();
+  int c = numberOfComponents();
 
-  int g = 2 - (n - m + f); 
+  int g = 2*c - (n - m + f); 
 
 #if DEBUG
-  printf("Computing genus: n=%d, m=%d, f=%d => genus = %d\n", n, m, f, g);
+  printf("Computing genus: n=%d, m=%d, f=%d, c=%d => genus = %d\n", n, m, f, c, g);
 #endif
 
   return g;
@@ -4084,20 +4184,19 @@ int Embedder::unique_emb(edge e, edge f)
 int Embedder::compute_singularities()
 {
   int res = 0;
-  Face * F;
   forall_emb_faces(F, *this)
-    res += F->compute_singularities();
+    res += (*F).compute_singularities();
 
   return res;
 }
 
 int Embedder::check_embedding(int gen, int orientable)
 {
+  compute_faces();
+
   if (orientable) 
     assert(orientable_emb() == orientable);
   
-  compute_faces();
-
   assert(genus() == gen);
 
   return 1;
@@ -4110,13 +4209,47 @@ int Embedder::compute_genus()
   return genus();
 }
 
+int Embedder::DFS_resign(NodeArray<int> & visited, EdgeArray<int> & sign, node v)
+{
+  visited[v] = 1;
+  
+  edge e;
+  forall_adj_edges(e, v) {
+    node u = e->opposite(v);
+
+    if (visited[u]) continue;
+
+    if (sign[e] != 1) {
+      edge f;
+      forall_adj_edges(f, u) 
+	sign[f] = -sign[f];
+      reverseAdjEdges(u);
+    }
+    DFS_resign(visited, sign, u);
+  }
+
+  return 0;
+}
+
 int Embedder::orientable_emb()
 {
+#if DEBUG
+  printf("In orientable_emb\n");
+#endif
+
+  //  EdgeArray<int> sign(mSignature);
+  NodeArray<int> seen(*this, 0);
+
+  node root = firstNode();
+  //DFS_resign(seen, sign, root);
+  DFS_resign(seen, mSignature, root);
+ 
   edge e;
-  forall_edges(e, *this) {
+  forall_edges(e, *this)
+    //    if (sign[e] != 1)
     if (mSignature[e] != 1)
       return -1;
-  }
+
   return 1;
 }
 
