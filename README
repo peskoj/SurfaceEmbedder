@@ -1,0 +1,14 @@
+REQUIREMENTS
+* OGDF library (http://www.ogdf.net)
+* jsoncpp library (http://sourceforge.net/projects/jsoncpp)
+
+INSTALLATION
+./configure
+make
+make install
+
+VERBOSITY
+./configure --enable-verbose
+
+DEBUGGING
+./configure --enable-debug
